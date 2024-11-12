@@ -90,6 +90,8 @@ def parse_args():
     parser.add_argument("--browser_user_agent", type=str, default=get_env_variable('BROWSER_USER_AGENT', default="GoogleBot/SchoolProject"))
     parser.add_argument("--browser_remote", type=bool, default=get_env_variable('BROWSER_REMOTE', default="false").lower() in ['true'])
 
+    parser.add_argument("--lock_name", type=str, default=get_env_variable('LOCK_NAME', default="crawler:db_lock"))
+
     # Parse and return the arguments
     return parser.parse_args()
 
