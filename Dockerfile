@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright dependencies (playwright needs some browsers to be installed)
-RUN python -m playwright install
+RUN python -m playwright install --with-deps
 
 # Other dependecies
 RUN python -m nltk.downloader -d /usr/local/share/nltk_data all
