@@ -37,13 +37,15 @@ class RobotsTxtManager:
         Returns:
             list: List of rules as tuples ("disallow"/"allow", path).
         """
+        parsed_rules = []
         robots_txt_content = self.cache.get_robots_txt_content(domain)
         if not robots_txt_content:
             robots_txt_content = self.fetch_robots_txt(domain)
-            if robots_txt_content:
-                self.cache.set_robots_txt_content(domain, robots_txt_content)
-                self.cache_crawl_delay(robots_txt_content, domain)
-        return self.parse_rules(robots_txt_content)
+        if robots_txt_content:
+            self.cache.set_robots_txt_content(domain, robots_txt_content)
+            self.cache_crawl_delay(robots_txt_content, domain)
+            parsed_rules = self.parse_rules(robots_txt_content)
+        return parsed_rules
 
     @staticmethod
     def fetch_robots_txt(domain):
@@ -61,6 +63,7 @@ class RobotsTxtManager:
             return response.text
         else:
             logging.warning(f"No accessible robots.txt for {domain}")
+        return None
 
     def cache_crawl_delay(self, robots_txt_content, domain):
         """

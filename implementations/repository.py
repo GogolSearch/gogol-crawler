@@ -21,11 +21,35 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self.batch_size = config["crawler_batch_size"]
         self.min_queue_size = config["crawler_min_queue_size"]
 
+    def _release_urls(self):
+        logging.debug("Attempting to acquire lock for url release operation.")
+
+        # Check if the lock is already held
+        if self.lock.locked():
+            logging.info("Lock is already held. Exiting url release operation.")
+            return False
+
+        urls = []
+        try:
+            # Attempt to acquire the lock
+            if self.lock.acquire(blocking=False):
+                urls = self.cache.pop_all_urls()
+                if urls:
+                    self.backend.release_urls(urls)
+            else:
+                logging.info("Failed to acquire lock. Exiting release url operation after cleanup.")
+        except psycopg.Error:
+            self.cache.put_url(*tuple(urls))
+            logging.error(f"Could not clear urls:\n{traceback.format_exc()}")
+        finally:
+            self.lock.release()
+
     def _batch(self) -> bool:
         """
         Processes pages, deletion candidates, and failed crawls in batches.
         Ensures that only one process can execute the batch at a time by using a lock.
         """
+        succeed = True
         logging.debug("Attempting to acquire lock for batch operation.")
 
         # Check if the lock is already held
@@ -35,44 +59,47 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
         try:
             # Attempt to acquire the lock
-            if not self.lock.acquire(blocking=False):
-                logging.info("Failed to acquire lock. Exiting batch operation.")
-                return False
+            if self.lock.acquire(blocking=False):
 
-            logging.debug("Lock acquired. Starting batch operation.")
-            pages = self.cache.pop_all_pages()
-            deletion_candidates = self.cache.pop_all_deletion_candidates()
-            failed_pages = self.cache.pop_all_failed_crawls()
+                logging.debug("Lock acquired. Starting batch operation.")
+                pages = self.cache.pop_all_pages()
+                deletion_candidates = self.cache.pop_all_deletion_candidates()
+                failed_pages = self.cache.pop_all_failed_crawls()
 
-            if not pages and not deletion_candidates and not failed_pages:
-                logging.info("Nothing to batch.")
-                return False
+                if not pages and not deletion_candidates and not failed_pages:
+                    logging.info("Nothing to batch.")
+                    return False
 
-            failed = {}
-            for url in failed_pages:
-                failed[url] = failed.get(url, 0) + 1
+                failed = {}
+                for url in failed_pages:
+                    failed[url] = failed.get(url, 0) + 1
 
-            self.backend.begin_transaction()
-            if pages:
-                logging.debug("Batch inserting pages.")
-                self.backend.insert_pages(pages)
-            if deletion_candidates:
-                logging.debug("Batch deleting pages.")
-                self.backend.delete_pages(deletion_candidates)
-            if failed_pages:
-                logging.debug("Batch updating failed crawl counters.")
-                self.backend.increment_failed_crawl_counter(failed)
-            self.backend.end_transaction(commit=True)
+                self.backend.begin_transaction()
+                if pages:
+                    logging.debug("Batch inserting pages.")
+                    self.backend.insert_pages(pages)
+                if deletion_candidates:
+                    logging.debug("Batch deleting pages.")
+                    self.backend.delete_pages(deletion_candidates)
+                if failed_pages:
+                    logging.debug("Batch updating failed crawl counters.")
+                    self.backend.increment_failed_crawl_counter(failed)
+                self.backend.end_transaction(commit=True)
 
-            logging.info(f"Successfully inserted {len(pages)} pages.")
-            logging.info(f"Successfully deleted {len(deletion_candidates)} URLs.")
-            logging.info(f"Successfully incremented {len(failed_pages)} failed URLs.")
+                logging.info(f"Successfully inserted {len(pages)} pages.")
+                logging.info(f"Successfully deleted {len(deletion_candidates)} URLs.")
+                logging.info(f"Successfully incremented {len(failed_pages)} failed URLs.")
+
+            else:
+                succeed = False
+                logging.info("Failed to acquire lock. Exiting batch operation after cleanup.")
+
         finally:
             # Ensure the lock is released regardless of what happens
             self.lock.release()
             logging.debug("Lock released after batch operation.")
 
-        return True
+        return succeed
 
     def insert_page_data(self, url, title, description, content, metadata, links):
         """Buffers insert operation in Redis and executes bulk insert when buffer is full."""
@@ -112,19 +139,12 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
             locked = self.lock.locked()
 
-            if cache_count <= 0 and locked:
-                logging.debug("Lock is already held and queue is empty. Exiting pop_url fetch operation.")
-                return None
-
             if not locked:
+                # Queue is not empty so we can pop url
                 try:
-                    if not self.lock.acquire(blocking=False):
-                        logging.debug("Failed to acquire lock. Exiting pop_url fetch operation.")
-                        return None
+                    if self.lock.acquire(blocking=False):
+                        logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
 
-                    logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
-
-                    try:
                         self.backend.begin_transaction()
                         urls = self.backend.get_urls(self.batch_size)
 
@@ -136,20 +156,20 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
                         self.backend.end_transaction(commit=True)
 
-                    except redis.RedisError as e:
+                except redis.RedisError as e:
+                    if self.backend.in_transaction():
                         self.backend.end_transaction(commit=False)
-                        logging.error(f"Redis error while replenishing queue propagating error")
-                        raise e
+                    logging.error(f"Redis error while replenishing queue propagating error")
+                    raise e
 
-                    except psycopg.Error:
-                        if self.backend.in_transaction():
-                            self.backend.end_transaction(commit=False)
+                except psycopg.Error:
+                    if self.backend.in_transaction():
+                        self.backend.end_transaction(commit=False)
                 finally:
                     # Ensure the lock is released regardless of what happens
                     self.lock.release()
                     logging.debug("Lock released after pop_url fetch operation.")
 
-        # So here we have only (no fetch needed) and (fetch needed but lock is acquired and queue not empty)
         logging.debug("Returning a popped URL from the cache.")
         return self.cache.pop_url()
 
@@ -168,10 +188,5 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
     def close(self):
         self._batch()
-        urls = None
-        try:
-            urls = self.cache.pop_all_urls()
-            self.backend.release_urls(urls)
-        except psycopg.Error as e:
-            self.cache.put_url(*tuple(urls))
-            logging.error(f"Could not clear urls:\n{traceback.format_exc()}")
+        self._release_urls()
+
