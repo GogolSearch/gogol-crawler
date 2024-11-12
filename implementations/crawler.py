@@ -91,7 +91,6 @@ class Crawler:
         Returns:
             bool: Returns True if processing succeeded, otherwise False.
         """
-        logging.info(f"Starting process for page {url} at {datetime.now():%Y-%m-%d %H:%M:%S}")
         domain = urlparse(url).netloc
 
         # Check rate limiting for the domain
@@ -99,7 +98,8 @@ class Crawler:
             logging.debug(f"Rate-limited, retry later: {url}")
             self.repository.put_url(url)  # Add the URL to the queue for retry
             return False
-
+            
+        logging.info(f"Starting process for page {url} at {datetime.now():%Y-%m-%d %H:%M:%S}")
         # Check robots.txt rules for the domain
         rules = None
         try:
