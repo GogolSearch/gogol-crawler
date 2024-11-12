@@ -1,0 +1,8 @@
+nltk~=3.9.1
+psycopg~=3.2.3
+requests~=2.32.3
+redis~=5.2.0
+playwright~=1.48.0
+psycopg-pool~=3.2.3
+psycopg[binary]~=3.2.3
+click~=8.1.7
