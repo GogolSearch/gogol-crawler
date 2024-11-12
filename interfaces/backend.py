@@ -38,6 +38,13 @@ class AbstractBackend(ABC):
         """
 
     @abstractmethod
+    def in_transaction(self) -> bool:
+        """
+        returns whether the backend is in transaction or not.
+        """
+        pass
+
+    @abstractmethod
     def get_urls(self, batch_size) -> List[Any]:
         """
         Retrieves a batch of pages (URLs) from the backend implementations that need to be crawled.

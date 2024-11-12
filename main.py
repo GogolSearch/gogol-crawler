@@ -10,6 +10,7 @@ import redis
 from psycopg_pool import ConnectionPool
 
 from implementations.crawler import Crawler
+from implementations.lock import RedisLock
 from implementations.repository import CrawlDataRepository
 from implementations import RedisCache, PostgreSQLBackend
 
@@ -40,10 +41,6 @@ def create_redis_client(config):
         encoding="utf-8",
         decode_responses=True
     )
-
-def create_cdr(config, cache, backend):
-    """Create and return a CrawlDataRepository."""
-    return CrawlDataRepository(config, cache, backend)
 
 def configure_signal_handlers(crawler, redis_client, pool):
     """Set up handlers for termination signals."""
@@ -113,7 +110,8 @@ def main():
     redis_client = create_redis_client(config)
     cache = RedisCache(redis_client)
     backend = PostgreSQLBackend(pool)
-    cdr = create_cdr(config, cache, backend)
+    lock = RedisLock(redis_client, config["lock_name"])
+    cdr = CrawlDataRepository(config, cache, backend, lock)
 
     # Define seed list for crawling
     seed_list = [

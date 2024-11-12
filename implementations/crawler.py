@@ -467,13 +467,14 @@ class Crawler:
                 url = self.repository.pop_url()
 
                 if not url:
-                    logging.info("No URL in queue. Waiting...")
+                    logging.info("No URL in cache queue. Retrieving from backend.")
                     if self.repository.force_batch():
                         continue
                     logging.info(
-                        "No URL in queue (cache and backend), and no URL available in cache. Waiting for some time.")
-                    time.sleep(1800)
-                    continue  # Wait for new URLs in cache
+                        "No URL in cache queue and did not get data from the backend. Either no url is available for "
+                        "now or the lock was acquired by an other crawler. Waiting...")
+                    time.sleep(10)
+                    continue
 
                 self.process_page(url)
 

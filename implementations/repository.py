@@ -11,60 +11,67 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
     def __init__(self, config : dict, cache: AbstractCache, backend: AbstractBackend, lock : AbstractLock):
         """
-        Initialise le répertoire de données de crawl avec un gestionnaire de base de données (db_manager)
-        et définit une taille maximale de récupération (max_pull_size) pour les lots de pages.
+        Initializes the crawl data repository with a cache and a backend manager.
+        Sets a maximum batch size for page processing and a minimum queue size.
         """
         self.cache = cache
         self.backend = backend
+        self.lock = lock
 
         self.batch_size = config["crawler_batch_size"]
         self.min_queue_size = config["crawler_min_queue_size"]
 
     def _batch(self) -> bool:
-        logging.debug("Starting batch.")
-        pages = self.cache.pop_all_pages()
-        deletion_candidates = self.cache.pop_all_deletion_candidates()
-        failed_pages = self.cache.pop_all_failed_crawls()
+        """
+        Processes pages, deletion candidates, and failed crawls in batches.
+        Ensures that only one process can execute the batch at a time by using a lock.
+        """
+        logging.debug("Attempting to acquire lock for batch operation.")
 
-        if not pages and not deletion_candidates and not failed_pages:
-            logging.info("Nothing to batch")
+        # Check if the lock is already held
+        if self.lock.locked():
+            logging.info("Lock is already held. Exiting batch operation.")
             return False
 
-        failed = {}
-
-        for i in failed_pages:
-            if i not in failed:
-                failed[i] = 1
-            else:
-                failed[i] += 1
         try:
+            # Attempt to acquire the lock
+            if not self.lock.acquire(blocking=False):
+                logging.info("Failed to acquire lock. Exiting batch operation.")
+                return False
+
+            logging.debug("Lock acquired. Starting batch operation.")
+            pages = self.cache.pop_all_pages()
+            deletion_candidates = self.cache.pop_all_deletion_candidates()
+            failed_pages = self.cache.pop_all_failed_crawls()
+
+            if not pages and not deletion_candidates and not failed_pages:
+                logging.info("Nothing to batch.")
+                return False
+
+            failed = {}
+            for url in failed_pages:
+                failed[url] = failed.get(url, 0) + 1
+
             self.backend.begin_transaction()
             if pages:
-                logging.debug("Batch page insert")
+                logging.debug("Batch inserting pages.")
                 self.backend.insert_pages(pages)
             if deletion_candidates:
-                logging.debug("Batch delete")
+                logging.debug("Batch deleting pages.")
                 self.backend.delete_pages(deletion_candidates)
             if failed_pages:
-                logging.debug("Batch failed crawl")
+                logging.debug("Batch updating failed crawl counters.")
                 self.backend.increment_failed_crawl_counter(failed)
             self.backend.end_transaction(commit=True)
-        except psycopg.Error as e:
-            logging.error(f"Could not batch:\n{traceback.format_exc()}")
-            self.backend.end_transaction(commit=False)
-            if pages:
-                logging.debug("Adding page back to cache")
-                self.cache.add_page(*pages)
-            if deletion_candidates:
-                logging.debug("Adding deletion candidates back to cache")
-                self.cache.add_deletion_candidate(*deletion_candidates)
-            if failed_pages:
-                logging.debug("Adding failed crawl back to cache")
-                self.cache.add_failed_crawl(*failed_pages)
-            raise e
-        logging.info(f"Successfully inserted {len(pages)} pages.")
-        logging.info(f"Successfully deleted {len(deletion_candidates)} urls.")
-        logging.info(f"Successfully incremented {len(failed_pages)} pages.")
+
+            logging.info(f"Successfully inserted {len(pages)} pages.")
+            logging.info(f"Successfully deleted {len(deletion_candidates)} URLs.")
+            logging.info(f"Successfully incremented {len(failed_pages)} failed URLs.")
+        finally:
+            # Ensure the lock is released regardless of what happens
+            self.lock.release()
+            logging.debug("Lock released after batch operation.")
+
         return True
 
     def insert_page_data(self, url, title, description, content, metadata, links):
@@ -92,23 +99,58 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self.cache.add_failed_crawl(*urls)
 
     def pop_url(self):
-        if self.cache.get_urls_count() <= self.min_queue_size:
-            logging.debug("Retrieving URLs for queue")
-            try:
-                self.backend.begin_transaction()
-                logging.debug("Get URLs")
-                urls = self.backend.get_urls(self.batch_size)
-                if urls:
-                    logging.debug("Set URLs as queued")
-                    self.backend.set_urls_as_queued(urls)
-                    logging.debug("Put URLs in cache")
-                    self.cache.put_url(*urls)
-                logging.debug("Ending transaction")
-                self.backend.end_transaction(commit=True)
-            except redis.RedisError:
-                logging.error(f"Redis error, rolling back:\n{traceback.format_exc()}")
-                self.backend.end_transaction(commit=False)
-        logging.debug("Returning Popped URL")
+        """
+        Retrieves a URL from the cache. If the queue size is below the minimum threshold,
+        fetches more URLs from the backend to replenish the queue.
+        Ensures that only one process can access the backend at a time using a lock.
+        """
+        cache_count = self.cache.get_urls_count()
+        need_fetch = cache_count <= self.min_queue_size
+
+        if need_fetch:
+            logging.debug("Attempting to acquire lock for pop_url fetch operation.")
+
+            locked = self.lock.locked()
+
+            if cache_count <= 0 and locked:
+                logging.debug("Lock is already held and queue is empty. Exiting pop_url fetch operation.")
+                return None
+
+            if not locked:
+                try:
+                    if not self.lock.acquire(blocking=False):
+                        logging.debug("Failed to acquire lock. Exiting pop_url fetch operation.")
+                        return None
+
+                    logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
+
+                    try:
+                        self.backend.begin_transaction()
+                        urls = self.backend.get_urls(self.batch_size)
+
+                        if urls:
+                            logging.debug("Marking URLs as queued.")
+                            self.backend.set_urls_as_queued(urls)
+                            logging.debug("Adding URLs to the cache.")
+                            self.cache.put_url(*urls)
+
+                        self.backend.end_transaction(commit=True)
+
+                    except redis.RedisError as e:
+                        self.backend.end_transaction(commit=False)
+                        logging.error(f"Redis error while replenishing queue propagating error")
+                        raise e
+
+                    except psycopg.Error:
+                        if self.backend.in_transaction():
+                            self.backend.end_transaction(commit=False)
+                finally:
+                    # Ensure the lock is released regardless of what happens
+                    self.lock.release()
+                    logging.debug("Lock released after pop_url fetch operation.")
+
+        # So here we have only (no fetch needed) and (fetch needed but lock is acquired and queue not empty)
+        logging.debug("Returning a popped URL from the cache.")
         return self.cache.pop_url()
 
     def put_url(self, *urls : str):

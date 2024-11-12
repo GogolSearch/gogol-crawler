@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from interfaces import AbstractBackend
@@ -53,11 +52,15 @@ class PostgreSQLBackend(AbstractBackend):
             self._transaction_cur = None  # Reset the cursor
             self._in_transaction = False
 
+    def in_transaction(self):
+        return self._in_transaction
+
     def _get_connection(self):
         """
         Returns the current connection to be used for operations.
         If a transaction is active, it returns the transaction connection.
         """
+
         if self._in_transaction:
             return self._transaction_conn
         else:
@@ -116,7 +119,6 @@ class PostgreSQLBackend(AbstractBackend):
             connection.commit()
             cursor.close()  # Close the cursor first
             self._pool.putconn(connection)  # Release the connection back to pool
-
         self._queued_counter += 1
 
     def release_urls(self, urls: List[str]) -> None:
