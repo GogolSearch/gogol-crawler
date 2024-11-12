@@ -163,7 +163,7 @@ class RedisCache(AbstractCache):
         return self._redis_client.get(robots_key)
 
     def set_next_crawl_time(self, domain: str, timestamp: float, ex=None):
-        if ex > self._max_in_memory_time:
+        if ex is not None and ex > self._max_in_memory_time:
             ex = None
         next_crawl_key = f"{self._domain_next_crawl_key_prefix}:{domain}"
         self._redis_client.set(next_crawl_key, timestamp, ex=ex)

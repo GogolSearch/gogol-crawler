@@ -56,15 +56,11 @@ class RobotsTxtManager:
         Returns:
             str: Content of the robots.txt file, or an empty string in case of an error.
         """
-        try:
-            response = requests.get(f"http://{domain}/robots.txt", timeout=5)
-            if response.status_code == 200:
-                return response.text
-            else:
-                logging.warning(f"No accessible robots.txt for {domain}")
-        except requests.RequestException as e:
-            logging.error(f"Error retrieving robots.txt for {domain}:\n{traceback.format_exc()}")
-        return ""
+        response = requests.get(f"http://{domain}/robots.txt", timeout=5)
+        if response.status_code == 200:
+            return response.text
+        else:
+            logging.warning(f"No accessible robots.txt for {domain}")
 
     def cache_crawl_delay(self, robots_txt_content, domain):
         """

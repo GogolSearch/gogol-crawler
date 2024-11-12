@@ -44,5 +44,5 @@ class RateLimiter:
         # Allow the request and set the next wait time based on crawl-delay or default delay
         crawl_delay = self.cache.get_crawl_delay(domain)
         delay = crawl_delay if crawl_delay else self.default_delay
-        self.cache.set_next_crawl_time(domain, float(current_time) + float(delay), ex=delay)
+        self.cache.set_next_crawl_time(domain, float(current_time) + float(delay), ex=int(delay))
         return True
