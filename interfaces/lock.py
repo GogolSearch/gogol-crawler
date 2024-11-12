@@ -5,6 +5,19 @@ class AbstractLock(ABC):
     """
     Abstract base class for a shared, distributed lock. The lock methods mimic those of `redis.lock.Lock` but some that are not used aren't specified even if the implementation will use them internally.
     """
+
+    @abstractmethod
+    def __enter__(self) -> "Lock":
+        pass
+        
+    @abstractmethod
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        pass
     
     @abstractmethod
     def acquire(
@@ -25,14 +38,7 @@ class AbstractLock(ABC):
         Check if the lock is held by any process.
         """
         pass
-    
-    @abstractmethod
-    def owned(self) -> bool:
-        """
-        Check if the lock is held by the current instance.
-        """
-        pass
-    
+        
     @abstractmethod
     def release(self) -> None:
         """
