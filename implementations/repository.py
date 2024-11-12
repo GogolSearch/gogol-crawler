@@ -23,6 +23,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self.min_queue_size = config["crawler_min_queue_size"]
 
     def _batch(self) -> bool:
+        logging.debug("Starting batch.")
         pages = self.cache.pop_all_pages()
         deletion_candidates = self.cache.pop_all_deletion_candidates()
         failed_pages = self.cache.pop_all_failed_crawls()
@@ -41,20 +42,26 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         try:
             self.backend.begin_transaction()
             if pages:
+                logging.debug("Batch page insert")
                 self.backend.insert_pages(pages)
             if deletion_candidates:
+                logging.debug("Batch delete")
                 self.backend.delete_pages(deletion_candidates)
             if failed_pages:
+                logging.debug("Batch failed crawl")
                 self.backend.increment_failed_crawl_counter(failed)
             self.backend.end_transaction(commit=True)
         except psycopg.Error as e:
             logging.error(f"Could not batch:\n{traceback.format_exc()}")
             self.backend.end_transaction(commit=False)
             if pages:
+                logging.debug("Adding page back to cache")
                 self.cache.add_page(*pages)
             if deletion_candidates:
+                logging.debug("Adding deletion candidates back to cache")
                 self.cache.add_deletion_candidate(*deletion_candidates)
             if failed_pages:
+                logging.debug("Adding failed crawl back to cache")
                 self.cache.add_failed_crawl(*failed_pages)
             raise e
         logging.info(f"Successfully inserted {len(pages)} pages.")
@@ -88,15 +95,22 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
     def pop_url(self):
         if self.cache.get_urls_count() <= self.min_queue_size:
+            logging.debug("Retrieving URLs for queue")
             try:
                 self.backend.begin_transaction()
+                logging.debug("Get URLs")
                 urls = self.backend.get_urls(self.batch_size)
                 if urls:
+                    logging.debug("Set URLs as queued")
                     self.backend.set_urls_as_queued(urls)
+                    logging.debug("Put URLs in cache")
                     self.cache.put_url(*urls)
+                logging.debug("Ending transaction")
                 self.backend.end_transaction(commit=True)
             except redis.RedisError:
+                logging.error(f"Redis error, rolling back:\n{traceback.format_exc()}")
                 self.backend.end_transaction(commit=False)
+        logging.debug("Returning Popped URL")
         return self.cache.pop_url()
 
     def put_url(self, *urls : str):
