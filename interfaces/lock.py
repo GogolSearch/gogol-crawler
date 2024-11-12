@@ -7,7 +7,7 @@ class AbstractLock(ABC):
     """
 
     @abstractmethod
-    def __enter__(self) -> "Lock":
+    def __enter__(self) -> AbstractLock:
         pass
         
     @abstractmethod
