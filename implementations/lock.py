@@ -57,3 +57,7 @@ class RedisLock(AbstractLock):
         Release the lock.
         """
         self.lock.release()
+
+    def owned(self) -> bool:
+        """Returns a boolean indicating if the lock is owned by the current instance."""
+        return self.lock.owned()

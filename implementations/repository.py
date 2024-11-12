@@ -37,25 +37,22 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 if urls:
                     self.backend.release_urls(urls)
             else:
-                logging.info("Failed to acquire lock. Exiting release url operation after cleanup.")
+                logging.debug("Lock is already held while trying in _release_urls operation")
         except psycopg.Error:
             self.cache.put_url(*tuple(urls))
             logging.error(f"Could not clear urls:\n{traceback.format_exc()}")
         finally:
-            self.lock.release()
+            if self.lock.owned():
+                self.lock.release()
+                logging.debug("Lock released after _release_urls operation")
 
     def _batch(self) -> bool:
         """
         Processes pages, deletion candidates, and failed crawls in batches.
         Ensures that only one process can execute the batch at a time by using a lock.
         """
-        succeed = True
+        succeed = False
         logging.debug("Attempting to acquire lock for batch operation.")
-
-        # Check if the lock is already held
-        if self.lock.locked():
-            logging.info("Lock is already held. Exiting batch operation.")
-            return False
 
         try:
             # Attempt to acquire the lock
@@ -89,15 +86,15 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 logging.info(f"Successfully inserted {len(pages)} pages.")
                 logging.info(f"Successfully deleted {len(deletion_candidates)} URLs.")
                 logging.info(f"Successfully incremented {len(failed_pages)} failed URLs.")
-
+                succeed = True
             else:
-                succeed = False
-                logging.info("Failed to acquire lock. Exiting batch operation after cleanup.")
+                logging.debug("Lock is already held while trying in batch operation")
 
         finally:
             # Ensure the lock is released regardless of what happens
-            self.lock.release()
-            logging.debug("Lock released after batch operation.")
+            if self.lock.owned():
+                self.lock.release()
+                logging.debug("Lock released after batch operation.")
 
         return succeed
 
@@ -137,36 +134,34 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         if need_fetch:
             logging.debug("Attempting to acquire lock for pop_url fetch operation.")
 
-            locked = self.lock.locked()
+            try:
+                if self.lock.acquire(blocking=False):
+                    logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
 
-            if not locked:
-                # Queue is not empty so we can pop url
-                try:
-                    if self.lock.acquire(blocking=False):
-                        logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
+                    self.backend.begin_transaction()
+                    urls = self.backend.get_urls(self.batch_size)
 
-                        self.backend.begin_transaction()
-                        urls = self.backend.get_urls(self.batch_size)
+                    if urls:
+                        logging.debug("Marking URLs as queued.")
+                        self.backend.set_urls_as_queued(urls)
+                        logging.debug("Adding URLs to the cache.")
+                        self.cache.put_url(*urls)
 
-                        if urls:
-                            logging.debug("Marking URLs as queued.")
-                            self.backend.set_urls_as_queued(urls)
-                            logging.debug("Adding URLs to the cache.")
-                            self.cache.put_url(*urls)
+                    self.backend.end_transaction(commit=True)
+                else:
+                    logging.debug("Lock is already held while trying in pop_url fetch operation")
+            except redis.RedisError as e:
+                if self.backend.in_transaction():
+                    self.backend.end_transaction(commit=False)
+                logging.error(f"Redis error while replenishing queue propagating error")
+                raise e
 
-                        self.backend.end_transaction(commit=True)
-
-                except redis.RedisError as e:
-                    if self.backend.in_transaction():
-                        self.backend.end_transaction(commit=False)
-                    logging.error(f"Redis error while replenishing queue propagating error")
-                    raise e
-
-                except psycopg.Error:
-                    if self.backend.in_transaction():
-                        self.backend.end_transaction(commit=False)
-                finally:
-                    # Ensure the lock is released regardless of what happens
+            except psycopg.Error:
+                if self.backend.in_transaction():
+                    self.backend.end_transaction(commit=False)
+            finally:
+                # Ensure the lock is released regardless of what happens
+                if self.lock.owned():
                     self.lock.release()
                     logging.debug("Lock released after pop_url fetch operation.")
 

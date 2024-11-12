@@ -34,3 +34,11 @@ class AbstractLock(ABC):
         Release the lock.
         """
         pass
+
+    @abstractmethod
+    def owned(self) -> None:
+        """
+        If the lock is owned by the current instance.
+        """
+        pass
+
