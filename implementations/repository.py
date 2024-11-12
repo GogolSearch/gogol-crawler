@@ -4,14 +4,12 @@ import traceback
 import psycopg
 import redis
 
-from interfaces import AbstractCache, AbstractBackend
-from interfaces.repository import AbstractCrawlDataRepository
-
+from interfaces import AbstractCache, AbstractBackend, AbstractCrawlDataRepository, AbstractLock
 
 class CrawlDataRepository(AbstractCrawlDataRepository):
     """Répertoire des données de crawl qui encapsule toutes les interactions avec les données"""
 
-    def __init__(self, config : dict, cache: AbstractCache, backend: AbstractBackend):
+    def __init__(self, config : dict, cache: AbstractCache, backend: AbstractBackend, lock : AbstractLock):
         """
         Initialise le répertoire de données de crawl avec un gestionnaire de base de données (db_manager)
         et définit une taille maximale de récupération (max_pull_size) pour les lots de pages.
