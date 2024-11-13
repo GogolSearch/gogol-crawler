@@ -15,7 +15,7 @@ class AbstractCrawlDataRepository(ABC):
         pass
 
     @abstractmethod
-    def add_failed_crawl(self, *urls : str):
+    def add_failed_try(self, *urls : str):
         pass
 
     @abstractmethod

@@ -99,7 +99,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def increment_failed_crawl_counter(self, fail_mapping: Dict) -> None:
+    def increment_failed_tries(self, fail_mapping: Dict) -> None:
         """
         Increments the failed crawl counter for a page in the backend implementations.
 

@@ -70,18 +70,29 @@ class RedisSerializer:
             return value
 
 class RedisCache(AbstractCache):
-    def __init__(self, redis_client : redis.Redis):
+    def __init__(
+            self, redis_client : redis.Redis,
+             url_queue_key,
+             page_list_key,
+             deletion_candidates_key,
+             failed_tries_key,
+             robots_key_prefix,
+             domain_next_crawl_key_prefix,
+             domain_crawl_delay_key_prefix,
+             robots_cache_ttl,
+             max_in_memory_time,
+    ):
         self._redis_client = redis_client
         self._serializer = RedisSerializer(redis_client)
-        self._url_queue_key = "crawler:queue"
-        self._page_list_key = "crawler:page_list"
-        self._deletion_candidates_key = "crawler:deletion_candidates"
-        self._failed_crawls_list_key = "crawler:failed_pages"
-        self._robots_key_prefix = "crawler:robots"
-        self._domain_next_crawl_key_prefix = "crawler:next_crawl"
-        self._domain_crawl_delay_key_prefix = "crawler:crawl_delay"
-        self._robots_cache_ttl = 300
-        self._max_in_memory_time = 600
+        self._url_queue_key = url_queue_key
+        self._page_list_key = page_list_key
+        self._deletion_candidates_key = deletion_candidates_key
+        self._failed_tries_list_key = failed_tries_key
+        self._robots_key_prefix = robots_key_prefix
+        self._domain_next_crawl_key_prefix = domain_next_crawl_key_prefix
+        self._domain_crawl_delay_key_prefix = domain_crawl_delay_key_prefix
+        self._robots_cache_ttl = robots_cache_ttl
+        self._max_in_memory_time = max_in_memory_time
 
     def _add_to_a_list_serialize(self, queue_key, data) -> Any:
         if isinstance(data, (str, int, float, bool)):  # Primitive types
@@ -140,18 +151,25 @@ class RedisCache(AbstractCache):
             deletion_candidates = []
         return deletion_candidates
 
+    def get_deletion_candidates_count(self) -> int:
+        return self._redis_client.scard(self._deletion_candidates_key)
+
     # Failed pages methods
-    def add_failed_crawl(self, *page_urls: str):
-        self._redis_client.lpush(self._failed_crawls_list_key, *page_urls)
+    def add_failed_try(self, *page_urls: str):
+        self._redis_client.lpush(self._failed_tries_list_key, *page_urls)
 
-    def remove_failed_crawl(self, *page_urls: str):
-        self._redis_client.rpop(self._failed_crawls_list_key, *page_urls)
+    def remove_failed_try(self, *page_urls: str):
+        for p in page_urls:
+            self._redis_client.lrem(self._failed_tries_list_key, 0, p)
 
-    def pop_all_failed_crawls(self) -> List[str]:
-        failed_crawls =  self._redis_client.rpop(self._failed_crawls_list_key, self._redis_client.llen(self._failed_crawls_list_key))
-        if not failed_crawls:
+    def pop_all_failed_tries(self) -> List[str]:
+        failed_tries =  self._redis_client.rpop(self._failed_tries_list_key, self._redis_client.llen(self._failed_tries_list_key))
+        if not failed_tries:
             failed_crawls = []
-        return failed_crawls
+        return failed_tries
+
+    def get_failed_tries_count(self) -> int:
+        return self._redis_client.llen(self._failed_tries_list_key)
 
     # Domain-specific data management
     def set_robots_txt_content(self, domain: str, robots_txt: str):

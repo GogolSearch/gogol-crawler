@@ -16,13 +16,12 @@ class RobotsTxtManager:
         cache (AbstractCache): Cache repository for storing and retrieving robots.txt data.
     """
 
-    def __init__(self, cache: AbstractCache, user_agent, robots_cache_ttl=300):
+    def __init__(self, cache: AbstractCache, user_agent):
         """
         Initializes the robots.txt manager.
 
         Args:
             cache (AbstractCache): Cache repository to store robots.txt data.
-            robots_cache_ttl (int, optional): Cache TTL for the robots.txt file, defaults to 300 seconds.
             user_agent (str): The bot user agent
         """
         self.cache = cache

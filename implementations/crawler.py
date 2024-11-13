@@ -107,7 +107,7 @@ class Crawler:
             rules = self.robots_manager.get_rules(domain)
         except (requests.exceptions.InvalidURL, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             logging.error(f"Connection error or invalid URL for {url}:\n{traceback.format_exc()}")
-            self.repository.add_failed_crawl(url)
+            self.repository.add_failed_try(url)
             return False
 
         if not self.robots_manager.is_url_allowed(rules, url):
@@ -162,11 +162,11 @@ class Crawler:
 
         except playwright.sync_api.Error:
             logging.error(f"Playwright error while processing {url}:\n{traceback.format_exc()}")
-            self.repository.add_failed_crawl(url)
+            self.repository.add_failed_try(url)
             return False
         except HTTPError as e:
             logging.error(f"URL {url} returned an error code {e.status_code}, skipping crawl.")
-            self.repository.add_failed_crawl(url)
+            self.repository.add_failed_try(url)
             return False
         except Exception:
             logging.error(f"Error processing {url}:\n{traceback.format_exc()}")

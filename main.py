@@ -75,8 +75,10 @@ def parse_args():
 
     # Crawler configuration
     parser.add_argument("--log_level", type=str, default=get_env_variable('LOG_LEVEL', default="INFO"))
-    parser.add_argument("--crawler_batch_size", type=int, default=get_env_variable('CRAWLER_BATCH_SIZE', default=20000))
-    parser.add_argument("--crawler_min_queue_size", type=int, default=get_env_variable('CRAWLER_MIN_QUEUE_SIZE', default=50))
+    parser.add_argument("--crawler_batch_size", type=int, default=get_env_variable('CRAWLER_BATCH_SIZE', default=300))
+    parser.add_argument("--crawler_queue_min_size", type=int, default=get_env_variable('CRAWLER_QUEUE_MIN_SIZE', default=50))
+    parser.add_argument("--crawler_deletion_candidates_max_size", type=int, default=get_env_variable('CRAWLER_DELETION_CANDIDATES_MAX_SIZE', default=100))
+    parser.add_argument("--crawler_failed_tries_max_size", type=int, default=get_env_variable('CRAWLER_FAILED_TRIES_MAX_SIZE', default=100))
     parser.add_argument("--crawler_default_delay", type=int, default=get_env_variable('CRAWLER_DEFAULT_DELAY', default=3))
 
     # Browser configuration
@@ -88,6 +90,26 @@ def parse_args():
     parser.add_argument("--browser_remote", type=bool, default=get_env_variable('BROWSER_REMOTE', default="false").lower() in ['true'])
 
     parser.add_argument("--lock_name", type=str, default=get_env_variable('LOCK_NAME', default="crawler:db_lock"))
+
+    parser.add_argument("--cache_url_queue_key", type=str,
+                        default=get_env_variable('CACHE_URL_QUEUE_KEY', default="crawler:url_queue"))
+    parser.add_argument("--cache_page_list_key", type=str,
+                        default=get_env_variable('CACHE_PAGE_LIST_KEY', default="crawler:page_list"))
+    parser.add_argument("--cache_deletion_candidates_key", type=str,
+                        default=get_env_variable('CACHE_DELETION_CANDIDATES_KEY',
+                                                 default="crawler:deletion_candidates"))
+    parser.add_argument("--cache_failed_tries_list_key", type=str,
+                        default=get_env_variable('CACHE_FAILED_TRIES_LIST_KEY', default="crawler:failed_tries"))
+    parser.add_argument("--cache_robots_key_prefix", type=str,
+                        default=get_env_variable('CACHE_ROBOTS_KEY_PREFIX', default="crawler:robots"))
+    parser.add_argument("--cache_domain_next_crawl_key_prefix", type=str,
+                        default=get_env_variable('CACHE_DOMAIN_NEXT_CRAWL_KEY_PREFIX', default="crawler:next_crawl"))
+    parser.add_argument("--cache_domain_crawl_delay_key_prefix", type=str,
+                        default=get_env_variable('CACHE_DOMAIN_CRAWL_DELAY_KEY_PREFIX', default="crawler:crawl_delay"))
+    parser.add_argument("--cache_robots_cache_ttl", type=int,
+                        default=get_env_variable('CACHE_ROBOTS_CACHE_TTL', default=300))
+    parser.add_argument("--cache_max_in_memory_time", type=int,
+                        default=get_env_variable('CACHE_MAX_IN_MEMORY_TIME', default=600))
 
     # Parse and return the arguments
     return parser.parse_args()
@@ -105,13 +127,35 @@ def main():
 
     if config["browser_remote"]:
         os.environ["SELENIUM_REMOTE_URL"] = f"http://{config["browser_host"]}:{config["browser_port"]}/wd/hub/"
+
     # Set up connections and resources
     pool = create_connection_pool(config)
     redis_client = create_redis_client(config)
-    cache = RedisCache(redis_client)
+
+    cache = RedisCache(
+        redis_client,
+        config["cache_url_queue_key"],
+        config["cache_page_list_key"],
+        config["cache_deletion_candidates_key"],
+        config["cache_failed_tries_list_key"],
+        config["cache_robots_key_prefix"],
+        config["cache_domain_next_crawl_key_prefix"],
+        config["cache_domain_crawl_delay_key_prefix"],
+        config["cache_robots_cache_ttl"],
+        config["cache_max_in_memory_time"],
+    )
+
     backend = PostgreSQLBackend(pool)
     lock = RedisLock(redis_client, config["lock_name"])
-    cdr = CrawlDataRepository(config, cache, backend, lock)
+    cdr = CrawlDataRepository(
+        cache,
+        backend,
+        lock,
+        config["crawler_batch_size"],
+        config["crawler_queue_min_size"],
+        config["crawler_failed_tries_max_size"],
+        config["crawler_deletion_candidates_max_size"],
+        )
 
     # Define seed list for crawling
     seed_list = [

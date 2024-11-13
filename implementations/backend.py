@@ -160,11 +160,11 @@ class PostgreSQLBackend(AbstractBackend):
             cursor.close()  # Close the cursor first
             self._pool.putconn(connection)  # Release the connection back to pool
 
-    def increment_failed_crawl_counter(self, fail_mapping: Dict) -> None:
+    def increment_failed_tries(self, fail_mapping: Dict) -> None:
         args = []
         for k, v in fail_mapping.items():
             args.append((v, k))
-        query = f"UPDATE {self._pages_table} SET failed_crawl_counter = failed_crawl_counter + %s WHERE url = %s"
+        query = f"UPDATE {self._pages_table} SET failed_tries = failed_tries + %s WHERE url = %s"
         # Get connection and cursor manually
         connection = self._get_connection()
         cursor = self._get_cursor(connection)

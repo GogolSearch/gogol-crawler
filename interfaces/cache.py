@@ -36,7 +36,7 @@ class AbstractCache(ABC):
 
     @abstractmethod
     def get_pages_count(self) -> int:
-        """get numbers of page in list"""
+        """get number of page"""
         pass
 
     # Deletion candidates management
@@ -46,29 +46,39 @@ class AbstractCache(ABC):
         pass
 
     @abstractmethod
+    def remove_deletion_candidate(self, *page_urls: str):
+        """Remove a URL from the deletion candidates list."""
+        pass
+
+    @abstractmethod
     def pop_all_deletion_candidates(self) -> List[str]:
         """Returns and clear all URLs in the deletion candidates list."""
         pass
 
     @abstractmethod
-    def remove_deletion_candidate(self, *page_urls: str):
-        """Remove a URL from the deletion candidates list."""
+    def get_deletion_candidates_count(self) -> int:
+        """get number of deletion candidates"""
         pass
 
     # Failed pages management
     @abstractmethod
-    def add_failed_crawl(self, *page_urls: str):
+    def add_failed_try(self, *page_urls: str):
         """Add one or multiple URL to the failed pages list."""
         pass
 
     @abstractmethod
-    def remove_failed_crawl(self, *page_urls: str):
+    def remove_failed_try(self, *page_urls: str):
         """Remove a URL from the failed pages list."""
         pass
 
     @abstractmethod
-    def pop_all_failed_crawls(self) -> List[str]:
+    def pop_all_failed_tries(self) -> List[str]:
         """Return and clear all URLs in the failed pages list."""
+        pass
+
+    @abstractmethod
+    def get_failed_tries_count(self) -> int:
+        """get number of failed tries"""
         pass
 
     # Domain-specific data management
