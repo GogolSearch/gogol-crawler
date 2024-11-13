@@ -460,7 +460,7 @@ class Crawler:
         logging.debug("Starting browser")
         self.start_browser()
 
-        logging.info("Seeding if needed")
+        logging.debug("Seeding if needed")
         self.repository.seed_if_needed(*self.seed_list)
 
         logging.debug("Main loop starting")

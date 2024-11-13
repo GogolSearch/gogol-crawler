@@ -135,7 +135,7 @@ class PostgreSQLBackend(AbstractBackend):
             self._pool.putconn(connection)  # Release the connection back to pool
 
     def insert_pages(self, pages_data: List[Dict]) -> None:
-        query = "CALL bulk_insert_pages(%s)"
+        query = "CALL batch_insert_pages(%s)"
         # Get connection and cursor manually
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
