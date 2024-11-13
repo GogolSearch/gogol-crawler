@@ -31,9 +31,9 @@ class AbstractCrawlDataRepository(ABC):
         pass
 
     @abstractmethod
-    def force_batch(self):
+    def force_batch(self) -> None:
         pass
 
     @abstractmethod
-    def close(self):
+    def close(self) -> None:
         pass

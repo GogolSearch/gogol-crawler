@@ -1,8 +1,10 @@
 import logging
 import traceback
+from typing import List, Tuple, Optional
 from urllib.parse import urlparse
 
 import requests
+from click import Tuple
 
 from interfaces import AbstractCache
 
@@ -16,7 +18,7 @@ class RobotsTxtManager:
         cache (AbstractCache): Cache repository for storing and retrieving robots.txt data.
     """
 
-    def __init__(self, cache: AbstractCache, user_agent):
+    def __init__(self, cache: AbstractCache, user_agent : str):
         """
         Initializes the robots.txt manager.
 
@@ -27,7 +29,7 @@ class RobotsTxtManager:
         self.cache = cache
         self.user_agent = user_agent
 
-    def get_rules(self, domain):
+    def get_rules(self, domain : str) -> List[tuple[str,str]]:
         """
         Retrieves and parses the robots.txt rules for a domain.
         If the content is not cached, fetches it via HTTP and caches it.
@@ -49,7 +51,7 @@ class RobotsTxtManager:
         return parsed_rules
 
     @staticmethod
-    def fetch_robots_txt(domain):
+    def fetch_robots_txt(domain : str) -> Optional[str]:
         """
         Fetches the robots.txt content for a domain.
 
@@ -66,7 +68,7 @@ class RobotsTxtManager:
             logging.warning(f"No accessible robots.txt for {domain}")
         return None
 
-    def cache_crawl_delay(self, robots_txt_content, domain):
+    def cache_crawl_delay(self, robots_txt_content : str, domain : str) -> None:
         """
         Extracts and caches the "crawl-delay" value from the robots.txt file, if present.
 
@@ -82,7 +84,7 @@ class RobotsTxtManager:
                 except ValueError:
                     logging.warning(f"Invalid crawl-delay value in robots.txt for {domain}")
 
-    def parse_rules(self, robots_txt_content):
+    def parse_rules(self, robots_txt_content : str) -> List[tuple[str, str]]:
         """
         Parses allow and disallow rules from robots.txt content.
 
@@ -109,12 +111,12 @@ class RobotsTxtManager:
         return rules
 
     @staticmethod
-    def is_url_allowed(rules, url):
+    def is_url_allowed(rules : list[tuple[str, str]], url : str) -> bool:
         """
         Determines if a URL is allowed based on the provided rules.
 
         Args:
-            rules (list): List of rules as tuples ("disallow"/"allow", path).
+            rules (list[tuple[str,str]]): List of rules as tuples ("disallow"/"allow", path).
             url (str): URL to check.
 
         Returns:

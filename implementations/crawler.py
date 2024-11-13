@@ -1,9 +1,10 @@
-import html
 import logging
 import re
 import traceback
 import time
-from datetime import datetime
+from typing import List
+
+import html
 from urllib.parse import urlparse, urljoin
 
 import playwright
@@ -94,93 +95,105 @@ class Crawler:
         Returns:
             bool: Returns True if processing succeeded, otherwise False.
         """
+
+        new_url = None
+        title = None
+        text = None
+        links = None
+        metadata = None
+        redirect_type = None
+        rules = None
+
         domain = urlparse(url).netloc
 
         # Check rate limiting for the domain
         if not self.rate_limiter.can_request(domain):
             logging.debug(f"Rate-limited, retry later: {url}")
             self.repository.put_url(url)  # Add the URL to the queue for retry
-            return False
+            return
             
-        logging.info(f"Starting process for page {url} at {datetime.now():%Y-%m-%d %H:%M:%S}")
+        logging.info(f"Starting process for page {url}")
+
         # Check robots.txt rules for the domain
-        rules = None
         try:
             rules = self.robots_manager.get_rules(domain)
         except (requests.exceptions.InvalidURL, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             logging.error(f"Connection error or invalid URL for {url}:\n{traceback.format_exc()}")
             self.repository.add_failed_try(url)
-            return False
+            return
 
         if not self.robots_manager.is_url_allowed(rules, url):
             logging.debug(f"Blocked by robots.txt: {url}")
             self.repository.delete_page(url)
-            return False
+            return
 
         # Fetch and process the page content
+        logging.debug("Starting fetch content")
+
         try:
-            logging.debug("Starting fetch content")
+
             new_url, title, text, links, metadata, redirect_type = self.fetch_and_parse_content(url)
-            logging.debug("Successfully fetched content.")
-
-            # Handle redirects
-            if new_url != url:
-                if redirect_type == 301:  # Permanent redirect
-                    logging.debug(f"Page URL permanently redirected, deleting: {url} -> {new_url}")
-                    self.repository.delete_page(url)
-                else:  # Temporary redirect
-                    logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
-                    new_url = url  # Use the original URL if temporary redirect
-
-            # Extract robots.txt directives for page processing
-            noindex = "noindex" in metadata.get("robots", "").lower()
-            nofollow = "nofollow" in metadata.get("robots", "").lower()
-            nosnippet = "nosnippet" in metadata.get("robots", "").lower()
-            max_snippet_value = self.get_max_snippet_length(metadata.get("robots", ""))
-
-            # Handle pages marked "noindex" or "nofollow"
-            if noindex:
-                logging.info(f"Page marked as noindex: {url}")
-
-            if nofollow:
-                logging.info(f"Page marked as nofollow, removing links: {url}")
-                links = []  # Clear all links if nofollow is present
-
-            # Filter links based on robots.txt rules and domain
-            links = self.filter_links(links, domain)
-
-            # Handle "nosnippet" and generate the best snippet
-            snippet = None if nosnippet else self.generate_best_snippet(text, title, max_snippet_value)
-
-            # Insert data into the repository
-            description = metadata.get("description", snippet)
-
-            title, description, text, metadata = self.sanitize_data(title, description, text, metadata)
-
-            self.repository.insert_page_data(new_url, title, description, text, metadata, links)
-
-            logging.debug("Page data inserted")
-            return True
 
         except playwright.sync_api.Error:
-            logging.error(f"Playwright error while processing {url}:\n{traceback.format_exc()}")
+            logging.error(f"Playwright error while fetching content{url}:\n{traceback.format_exc()}")
             self.repository.add_failed_try(url)
             return False
+
         except HTTPError as e:
             logging.error(f"URL {url} returned an error code {e.status_code}, skipping crawl.")
             self.repository.add_failed_try(url)
             return False
-        except Exception:
-            logging.error(f"Error processing {url}:\n{traceback.format_exc()}")
-            return False
 
-    def filter_links(self, links, current_domain):
+        logging.debug("Successfully fetched content.")
+
+        # Handle redirects
+        if new_url != url:
+            if redirect_type == 301:  # Permanent redirect
+                logging.debug(f"Page URL permanently redirected, deleting: {url} -> {new_url}")
+                self.repository.delete_page(url)
+            else:  # Temporary redirect
+                logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
+                new_url = url  # Use the original URL if temporary redirect
+
+        # Extract robots.txt directives for page processing
+        noindex = "noindex" in metadata.get("robots", "").lower()
+        nofollow = "nofollow" in metadata.get("robots", "").lower()
+        nosnippet = "nosnippet" in metadata.get("robots", "").lower()
+
+        max_snippet_value = self.get_max_snippet_length(metadata.get("robots", ""))
+
+        # Handle pages marked "noindex" or "nofollow"
+        if noindex:
+            logging.info(f"Page marked as noindex: {url}")
+
+        if nofollow:
+            logging.info(f"Page marked as nofollow, removing links: {url}")
+            links = []  # Clear all links if nofollow is present
+
+        # Filter links based on robots.txt rules and domain
+        links = self.filter_links(links, domain, rules)
+
+        # Handle "nosnippet" and generate the best snippet
+        snippet = None if nosnippet else self.generate_best_snippet(text, title, max_snippet_value)
+
+        # Insert data into the repository
+        description = metadata.get("description", snippet)
+
+        title, description, text, metadata = self.sanitize_data(title, description, text, metadata)
+
+        self.repository.insert_page_data(new_url, title, description, text, metadata, links)
+
+        logging.debug("Page was put in queue")
+        return True
+
+    def filter_links(self, links, current_domain, current_rules : List):
         """
         Filters links based on regex and robots.txt rules for links belonging to the same domain.
 
         Args:
             links (list): List of links to filter.
             current_domain (str): The current domain of the page to check against the rules.
+            current_rules (str): The current domain robots txt rules
 
         Returns:
             list: List of filtered links based on robots.txt rules.
@@ -191,8 +204,7 @@ class Crawler:
             if re.match(regex, link):
                 link_domain = urlparse(link).netloc
                 if link_domain == current_domain:  # Check only links on the same domain
-                    link_rules = self.robots_manager.get_rules(link_domain)
-                    if self.robots_manager.is_url_allowed(link_rules, link):
+                    if self.robots_manager.is_url_allowed(current_rules, link):
                         filtered_links.append(link)
                 else:
                     filtered_links.append(link)  # Add links from other domains without checking
@@ -272,9 +284,6 @@ class Crawler:
 
             return new_url, title, text, links, metadata, redirect_type
 
-        except Exception as e:
-            logging.error(f"Error retrieving and parsing content for {url}:\n{traceback.format_exc()}")
-            raise e
         finally:
             page.close()
 
@@ -484,8 +493,8 @@ class Crawler:
                 self.process_page(url)
 
             except Exception:
-                logging.error(f"Error occurred: {traceback.format_exc()}")
-                self.stop()
+                logging.error(f"An Unexpected error occurred: {traceback.format_exc()}")
+                continue
 
             except KeyboardInterrupt:
                 logging.info("Manual stop...")

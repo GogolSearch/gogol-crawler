@@ -39,13 +39,13 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
     def _release_urls(self):
         if self._lock.owned():
             self._lock.release()
-            logging.info("Released lock in batch operation, lock was already owned")
+            logging.debug("Released lock in batch operation, lock was already owned")
 
-        logging.info("Attempting to acquire lock for url release operation.")
+        logging.debug("Attempting to acquire lock for url release operation.")
 
         # Check if the lock is already held
         if self._lock.locked():
-            logging.info("Lock is already held. Exiting url release operation.")
+            logging.debug("Lock is already held. Exiting url release operation.")
             return False
 
         urls = []
@@ -56,14 +56,14 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 if urls:
                     self._backend.release_urls(urls)
             else:
-                logging.info("Lock is already held while trying in _release_urls operation")
+                logging.debug("Lock is already held while trying in _release_urls operation")
         except psycopg.Error:
             self._cache.put_url(*tuple(urls))
             logging.error(f"Could not clear urls:\n{traceback.format_exc()}")
         finally:
             if self._lock.owned():
                 self._lock.release()
-                logging.info("Lock released after _release_urls operation")
+                logging.debug("Lock released after _release_urls operation")
 
     def _batch_pages(self, pages):
         logging.debug("Batch updating pages")
@@ -85,8 +85,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         logging.info(f"Successfully incremented {len(failed_pages)} failed URLs in {failed_pages_end - failed_pages_start} seconds.")
 
     def _batch_deletion_candidates(self, deletion_candidates):
-        logging.debug("Batch deleting candidates.")
-        logging.debug("Batch deleting pages.")
+        logging.debug("Batch deleting deletion candidates.")
         deletion_candidates_start = time.time()
         self._backend.delete_pages(deletion_candidates)
         deletion_candidates_end = time.time()
@@ -99,19 +98,19 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         """
         if self._lock.owned():
             self._lock.release()
-            logging.info("Released lock in batch operation, lock was already owned")
+            logging.debug("Released lock in batch operation, lock was already owned")
 
         succeed = False
         pages = []
         failed_pages = []
         deletion_candidates = []
 
-        logging.info("Attempting to acquire lock for batch operation.")
+        logging.debug("Attempting to acquire lock for batch operation.")
         try:
             # Attempt to acquire the lock
             if self._lock.acquire(blocking=False, token=self._token):
 
-                logging.info("Lock acquired. Starting batch operation.")
+                logging.debug("Lock acquired. Starting batch operation.")
 
                 pages = self._cache.pop_all_pages()
                 failed_tries = self._cache.pop_all_failed_tries()
@@ -196,15 +195,15 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         need_fetch = cache_count <= self._min_queue_size
 
         if need_fetch:
-            logging.info("Attempting to acquire lock for pop_url fetch operation.")
+            logging.debug("Attempting to acquire lock for pop_url fetch operation.")
 
             try:
                 if self._lock.owned():
                     self._lock.release()
-                    logging.info("Released lock in pop_url fetch operation, lock was already owned")
+                    logging.debug("Released lock in pop_url fetch operation, lock was already owned")
 
                 if self._lock.acquire(blocking=False, token=self._token):
-                    logging.info("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
+                    logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
 
                     self._backend.begin_transaction()
                     urls = self._backend.get_urls(self._batch_size)
@@ -217,7 +216,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
                     self._backend.end_transaction(commit=True)
                 else:
-                    logging.info("Lock is already held while trying in pop_url fetch operation")
+                    logging.debug("Lock is already held while trying in pop_url fetch operation")
 
             except redis.RedisError as e:
                 if self._backend.in_transaction():
@@ -232,7 +231,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 # Ensure the lock is released regardless of what happens
                 if self._lock.owned():
                     self._lock.release()
-                    logging.info("Lock released after pop_url fetch operation.")
+                    logging.debug("Lock released after pop_url fetch operation.")
 
         logging.debug("Returning a popped URL from the cache.")
         return self._cache.pop_url()
@@ -242,20 +241,20 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
     def seed_if_needed(self, *urls : str) -> bool:
         """Returns true if seed was needed false otherwise"""
-        logging.info("Attempting to acquire lock for seed_if_needed operation.")
+        logging.debug("Attempting to acquire lock for seed_if_needed operation.")
         success = False
         try:
             if self._lock.owned():
                 self._lock.release()
-                logging.info("Released lock in seed_if_needed operation, lock was already owned")
+                logging.debug("Released lock in seed_if_needed operation, lock was already owned")
             if self._lock.acquire(blocking=False, token=self._token):
-                logging.info("Lock acquired for seed_if_needed operation. Checking backend for pages.")
+                logging.debug("Lock acquired for seed_if_needed operation. Checking backend for pages.")
 
                 if not self._backend.get_urls(self._batch_size):
                     self._cache.put_url(*urls)
                     success = True
             else:
-                logging.info("Lock is already held while trying in seed_if_needed operation")
+                logging.debug("Lock is already held while trying in seed_if_needed operation")
         finally:
             if self._lock.owned():
                 self._lock.release()

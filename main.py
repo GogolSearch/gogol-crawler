@@ -127,7 +127,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--crawler_queue_min_size",
         type=int,
-        default=get_env_variable('CRAWLER_QUEUE_MIN_SIZE', default=50)
+        default=get_env_variable('CRAWLER_QUEUE_MIN_SIZE', default=100)
     )
 
     parser.add_argument(
