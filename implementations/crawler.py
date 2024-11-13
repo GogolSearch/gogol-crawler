@@ -24,13 +24,14 @@ class Crawler:
     and rate limiting, all using an automated browser (Playwright).
 
     Attributes:
+        config (dict): The config dictionary
+        seed_list (list): Initial list of URLs or seeds for the crawler to start processing.
         repository (AbstractCrawlDataRepository): Repository instance for storing and accessing crawl data.
         rate_limiter (RateLimiter): Manages the rate-limiting process to control request frequency.
         robots_manager (RobotsTxtManager): Manages access to and compliance with robots.txt files.
-        seed_list (list): Initial list of URLs or seeds for the crawler to start processing.
+        max_description_length (int): Maximum length of text descriptions to be extracted during crawling.
         browser (Browser): Instance of the automated browser (Playwright).
         context (BrowserContext): Browser context for each session to manage browser-specific settings.
-        max_description_length (int): Maximum length of text descriptions to be extracted during crawling.
         running (bool): Flag indicating whether the crawler is actively running.
     """
 
@@ -42,6 +43,7 @@ class Crawler:
             repository (AbstractCrawlDataRepository): Repository for storing and retrieving crawl data.
             cache (AbstractCache): Cache system used for managing rate limiting and other temporary data.
             seed_list (list): List of initial URLs or seeds for the crawler to process.
+            config (dict): The configuration dictionary.
         """
         # Initialize crawler components
         self.config = config
@@ -51,7 +53,7 @@ class Crawler:
         self.robots_manager = RobotsTxtManager(cache, self.config["browser_user_agent"])
 
         # Default keys and parameters
-        self.max_description_length = 300  # Maximum length for extracted descriptions
+        self.max_description_length = config["max_description_length"]  # Maximum length for extracted descriptions
         self.browser = None
         self.context = None
         self.running = True

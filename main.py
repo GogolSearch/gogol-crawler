@@ -148,6 +148,12 @@ def parse_args() -> argparse.Namespace:
         default=get_env_variable('CRAWLER_DEFAULT_DELAY', default=3)
     )
 
+    parser.add_argument(
+        "--crawler_max_description_length",
+        type=int,
+        default=get_env_variable('CRAWLER_MAX_DESCRIPTION_LENGTH', default=300)
+    )
+
     # Browser configuration
     browser_headless = get_env_variable('BROWSER_HEADLESS', default="true").lower() in ['true', 't']
 
