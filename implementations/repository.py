@@ -1,5 +1,7 @@
 import logging
+import time
 import traceback
+import uuid
 
 import psycopg
 import redis
@@ -17,6 +19,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self.cache = cache
         self.backend = backend
         self.lock = lock
+        self.token = uuid.uuid4().hex
 
         self.batch_size = config["crawler_batch_size"]
         self.min_queue_size = config["crawler_min_queue_size"]
@@ -32,7 +35,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         urls = []
         try:
             # Attempt to acquire the lock
-            if self.lock.acquire(blocking=False):
+            if self.lock.acquire(blocking=False, token=self.token):
                 urls = self.cache.pop_all_urls()
                 if urls:
                     self.backend.release_urls(urls)
@@ -54,9 +57,16 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         succeed = False
         logging.debug("Attempting to acquire lock for batch operation.")
 
+        page_start = 0
+        page_end = 0
+        deletion_candidates_start = 0
+        deletion_candidates_end = 0
+        failed_pages_start = 0
+        failed_pages_end = 0
+
         try:
             # Attempt to acquire the lock
-            if self.lock.acquire(blocking=False):
+            if self.lock.acquire(blocking=False, token=self.token):
 
                 logging.debug("Lock acquired. Starting batch operation.")
                 pages = self.cache.pop_all_pages()
@@ -71,21 +81,29 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 for url in failed_pages:
                     failed[url] = failed.get(url, 0) + 1
 
+                start = time.time()
                 self.backend.begin_transaction()
                 if pages:
                     logging.debug("Batch inserting pages.")
+                    page_start = time.time()
                     self.backend.insert_pages(pages)
+                    page_end = time.time()
                 if deletion_candidates:
                     logging.debug("Batch deleting pages.")
+                    deletion_candidates_start = time.time()
                     self.backend.delete_pages(deletion_candidates)
+                    deletion_candidates_end = time.time()
                 if failed_pages:
                     logging.debug("Batch updating failed crawl counters.")
+                    failed_pages_start = time.time()
                     self.backend.increment_failed_crawl_counter(failed)
+                    failed_pages_end = time.time()
                 self.backend.end_transaction(commit=True)
-
-                logging.info(f"Successfully inserted {len(pages)} pages.")
-                logging.info(f"Successfully deleted {len(deletion_candidates)} URLs.")
-                logging.info(f"Successfully incremented {len(failed_pages)} failed URLs.")
+                end = time.time()
+                logging.info(f"Successfully inserted {len(pages)} pages in {page_end - page_start} seconds.")
+                logging.info(f"Successfully deleted {len(deletion_candidates)} URLs in {deletion_candidates_end - deletion_candidates_start} seconds..")
+                logging.info(f"Successfully incremented {len(failed_pages)} failed URLs in {failed_pages_end - failed_pages_start} seconds.")
+                logging.info(f"Successfully realised all needed operations in {end - start} seconds.")
                 succeed = True
             else:
                 logging.debug("Lock is already held while trying in batch operation")
@@ -135,7 +153,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
             logging.debug("Attempting to acquire lock for pop_url fetch operation.")
 
             try:
-                if self.lock.acquire(blocking=False):
+                if self.lock.acquire(blocking=False, token=self.token):
                     logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
 
                     self.backend.begin_transaction()
@@ -173,15 +191,27 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
     def seed_if_needed(self, *urls : str) -> bool:
         """Returns true if seed was needed false otherwise"""
-        if not self.backend.get_urls(self.batch_size):
-            self.cache.put_url(*urls)
-            return True
-        return False
+        logging.debug("Attempting to acquire lock for seed_if_needed operation.")
+        success = False
+        try:
+            if self.lock.acquire(blocking=False, token=self.token):
+                logging.debug("Lock acquired for seed_if_needed operation. Checking backend for pages.")
+
+                if not self.backend.get_urls(self.batch_size):
+                    self.cache.put_url(*urls)
+                    success = True
+            else:
+                logging.debug("Lock is already held while trying in seed_if_needed operation")
+        finally:
+            if self.lock.owned():
+                self.lock.release()
+        return success
 
     def force_batch(self):
         return self._batch()
 
     def close(self):
+        if self.lock.owned():
+            self.lock.release()
         self._batch()
         self._release_urls()
-
