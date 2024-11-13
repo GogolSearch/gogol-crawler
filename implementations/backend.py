@@ -133,9 +133,9 @@ class PostgreSQLBackend(AbstractBackend):
         """
         query = f"SELECT url FROM {self._pages_table} WHERE last_crawled_at IS NULL"
         if self._queued_counter % 5 == 0:
-            query += f" OR last_crawled_at < NOW() - 'INTERVAL 1 DAY'"
+            query += f" OR last_crawled_at < NOW() - INTERVAL '1 DAY'"
 
-        query += " ORDER BY id LIMIT %s;"
+        query += " ORDER BY id LIMIT %s"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.execute(query, (batch_size,))
