@@ -53,7 +53,7 @@ class Crawler:
         self.robots_manager = RobotsTxtManager(cache, self.config["browser_user_agent"])
 
         # Default keys and parameters
-        self.max_description_length = config["max_description_length"]  # Maximum length for extracted descriptions
+        self.max_description_length = config["crawler_max_description_length"]  # Maximum length for extracted descriptions
         self.browser = None
         self.context = None
         self.running = True
