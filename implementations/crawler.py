@@ -11,6 +11,7 @@ import requests
 from nltk import sent_tokenize
 from playwright.sync_api import sync_playwright
 
+from constants import DJANGO_URL_VALIDATION
 from implementations.exceptions import HTTPError
 from implementations.ratelimiter import RateLimiter
 from implementations.robots import RobotsTxtManager
@@ -173,7 +174,7 @@ class Crawler:
 
     def filter_links(self, links, current_domain):
         """
-        Filters links based on robots.txt rules for links belonging to the same domain.
+        Filters links based on regex and robots.txt rules for links belonging to the same domain.
 
         Args:
             links (list): List of links to filter.
@@ -182,15 +183,17 @@ class Crawler:
         Returns:
             list: List of filtered links based on robots.txt rules.
         """
+        regex = re.compile(DJANGO_URL_VALIDATION, re.IGNORECASE)
         filtered_links = []
         for link in links:
-            link_domain = urlparse(link).netloc
-            if link_domain == current_domain:  # Check only links on the same domain
-                link_rules = self.robots_manager.get_rules(link_domain)
-                if self.robots_manager.is_url_allowed(link_rules, link):
-                    filtered_links.append(link)
-            else:
-                filtered_links.append(link)  # Add links from other domains without checking
+            if re.match(regex, link):
+                link_domain = urlparse(link).netloc
+                if link_domain == current_domain:  # Check only links on the same domain
+                    link_rules = self.robots_manager.get_rules(link_domain)
+                    if self.robots_manager.is_url_allowed(link_rules, link):
+                        filtered_links.append(link)
+                else:
+                    filtered_links.append(link)  # Add links from other domains without checking
         return filtered_links
 
     def fetch_and_parse_content(self, url):

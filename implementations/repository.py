@@ -25,6 +25,10 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self.min_queue_size = config["crawler_min_queue_size"]
 
     def _release_urls(self):
+        if self.lock.owned():
+            self.lock.release()
+            logging.debug("Released lock in batch operation, lock was already owned")
+
         logging.debug("Attempting to acquire lock for url release operation.")
 
         # Check if the lock is already held
@@ -54,6 +58,9 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         Processes pages, deletion candidates, and failed crawls in batches.
         Ensures that only one process can execute the batch at a time by using a lock.
         """
+        if self.lock.owned():
+            self.lock.release()
+            logging.debug("Released lock in batch operation, lock was already owned")
         succeed = False
         logging.debug("Attempting to acquire lock for batch operation.")
 
@@ -153,6 +160,10 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
             logging.debug("Attempting to acquire lock for pop_url fetch operation.")
 
             try:
+                if self.lock.owned():
+                    self.lock.release()
+                    logging.debug("Released lock in pop_url fetch operation, lock was already owned")
+
                 if self.lock.acquire(blocking=False, token=self.token):
                     logging.debug("Lock acquired for pop_url operation. Retrieving URLs to replenish the queue.")
 
@@ -168,6 +179,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                     self.backend.end_transaction(commit=True)
                 else:
                     logging.debug("Lock is already held while trying in pop_url fetch operation")
+
             except redis.RedisError as e:
                 if self.backend.in_transaction():
                     self.backend.end_transaction(commit=False)
@@ -194,6 +206,9 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         logging.debug("Attempting to acquire lock for seed_if_needed operation.")
         success = False
         try:
+            if self.lock.owned():
+                self.lock.release()
+                logging.debug("Released lock in seed_if_needed operation, lock was already owned")
             if self.lock.acquire(blocking=False, token=self.token):
                 logging.debug("Lock acquired for seed_if_needed operation. Checking backend for pages.")
 
