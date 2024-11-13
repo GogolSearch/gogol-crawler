@@ -84,7 +84,7 @@ def parse_args():
     parser.add_argument("--browser_headless", type=bool, default=browser_headless)
     parser.add_argument("--browser_port", type=int, default=get_env_variable('BROWSER_PORT', default=4444))
     parser.add_argument("--browser_host", type=str, default=get_env_variable('BROWSER_HOST', default="localhost"))
-    parser.add_argument("--browser_user_agent", type=str, default=get_env_variable('BROWSER_USER_AGENT', default="GoogleBot/SchoolProject"))
+    parser.add_argument("--browser_user_agent", type=str, default=get_env_variable('BROWSER_USER_AGENT', default="GogolBot/SchoolProject"))
     parser.add_argument("--browser_remote", type=bool, default=get_env_variable('BROWSER_REMOTE', default="false").lower() in ['true'])
 
     parser.add_argument("--lock_name", type=str, default=get_env_variable('LOCK_NAME', default="crawler:db_lock"))

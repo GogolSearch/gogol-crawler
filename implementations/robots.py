@@ -16,15 +16,17 @@ class RobotsTxtManager:
         cache (AbstractCache): Cache repository for storing and retrieving robots.txt data.
     """
 
-    def __init__(self, cache: AbstractCache, robots_cache_ttl=300):
+    def __init__(self, cache: AbstractCache, user_agent, robots_cache_ttl=300):
         """
         Initializes the robots.txt manager.
 
         Args:
             cache (AbstractCache): Cache repository to store robots.txt data.
             robots_cache_ttl (int, optional): Cache TTL for the robots.txt file, defaults to 300 seconds.
+            user_agent (str): The bot user agent
         """
         self.cache = cache
+        self.user_agent = user_agent
 
     def get_rules(self, domain):
         """
@@ -81,8 +83,7 @@ class RobotsTxtManager:
                 except ValueError:
                     logging.warning(f"Invalid crawl-delay value in robots.txt for {domain}")
 
-    @staticmethod
-    def parse_rules(robots_txt_content):
+    def parse_rules(self, robots_txt_content):
         """
         Parses allow and disallow rules from robots.txt content.
 
@@ -99,10 +100,10 @@ class RobotsTxtManager:
             line = line.strip()
             if line.startswith("User-agent:"):
                 user_agent = line.split(":", 1)[1].strip().lower()
-            elif line.startswith("Disallow:") and user_agent in ("*", "googlebot"):
+            elif line.startswith("Disallow:") and user_agent in ("*", self.user_agent):
                 path = line.split(":", 1)[1].strip()
                 rules.append(("disallow", path))
-            elif line.startswith("Allow:") and user_agent in ("*", "googlebot"):
+            elif line.startswith("Allow:") and user_agent in ("*", self.user_agent):
                 path = line.split(":", 1)[1].strip()
                 rules.append(("allow", path))
 
