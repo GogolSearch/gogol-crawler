@@ -28,7 +28,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self._cache = cache
         self._backend = backend
         self._lock = lock
-        self._token = uuid.uuid4().hex
+        self._token = uuid.uuid1().hex
 
         self._batch_size = batch_size
         self._min_queue_size = queue_min_size
