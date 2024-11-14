@@ -45,7 +45,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
         # Check if the lock is already held
         if self._lock.locked():
-            logging.debug("Lock is already held. Exiting url release operation.")
+            logging.debug(f"Lock is already held. Exiting url release operation. token : {self._token}")
             return False
 
         urls = []
@@ -56,7 +56,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 if urls:
                     self._backend.release_urls(urls)
             else:
-                logging.debug("Lock is already held while trying in _release_urls operation")
+                logging.debug(f"Lock is already held while trying in _release_urls operation. token : {self._token}")
         except psycopg.Error:
             self._cache.put_url(*tuple(urls))
             logging.error(f"Could not clear urls:\n{traceback.format_exc()}")
@@ -137,7 +137,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 logging.info(f"Successfully realised all needed operations in {end - start} seconds.")
                 succeed = True
             else:
-                logging.debug("Lock is already held while trying in batch operation")
+                logging.debug(f"Lock is already held while trying in batch operation. token : {self._token}")
 
         except psycopg.Error as e:
             logging.error(f"Could not batch:\n{traceback.format_exc()}")
@@ -216,7 +216,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
 
                     self._backend.end_transaction(commit=True)
                 else:
-                    logging.debug("Lock is already held while trying in pop_url fetch operation")
+                    logging.debug(f"Lock is already held while trying in pop_url fetch operation. token : {self._token}")
 
             except redis.RedisError as e:
                 if self._backend.in_transaction():
@@ -254,7 +254,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                     self._cache.put_url(*urls)
                     success = True
             else:
-                logging.debug("Lock is already held while trying in seed_if_needed operation")
+                logging.debug(f"Lock is already held while trying in seed_if_needed operation. token : {self._token}")
         finally:
             if self._lock.owned():
                 self._lock.release()
