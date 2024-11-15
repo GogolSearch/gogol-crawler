@@ -15,6 +15,8 @@ class RedisSerializer:
         self._suffix = "-redis-serializer-reference"
 
     def serialize_data(self, parent_key, data):
+        if data is None:
+            return "<nil>"
         if isinstance(data, (str, int, float)):
             return data
         elif isinstance(data, list):
@@ -67,6 +69,8 @@ class RedisSerializer:
                 value = []
             elif data_key == "{}":
                 value = {}
+            elif data_key == "<nil>":
+                value = None
             return value
 
 class RedisCache(AbstractCache):
