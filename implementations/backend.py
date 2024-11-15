@@ -21,7 +21,7 @@ class PostgreSQLBackend(AbstractBackend):
     Attributes:
         _queued_counter (int): Counter to track the number of queued operations.
         _pool (ConnectionPool): Connection pool used to manage database connections.
-        _pages_table (str): Name of the table storing page data.
+        _urls_table (str): Name of the table storing page data.
         _transaction_conn (Optional[psycopg.Connection]): The current active connection during a transaction.
         _transaction_cur (Optional[psycopg.Cursor]): The current active cursor during a transaction.
         _in_transaction (bool): Flag indicating whether a transaction is in progress.
@@ -36,7 +36,7 @@ class PostgreSQLBackend(AbstractBackend):
         """
         self._queued_counter = 0
         self._pool = pool
-        self._pages_table = "pages"
+        self._urls_table = "urls"
         self._transaction_conn = None  # Holds the connection during a transaction
         self._transaction_cur = None  # Holds the cursor during a transaction
         self._in_transaction = False  # Flag to track transaction state
@@ -131,7 +131,7 @@ class PostgreSQLBackend(AbstractBackend):
         Returns:
             List[str]: A list of URLs fetched from the database.
         """
-        query = f"SELECT url FROM {self._pages_table} WHERE last_crawled_at IS NULL"
+        query = f"SELECT url FROM {self._urls_table} WHERE last_crawled_at IS NULL"
         if self._queued_counter % 5 == 0:
             query += f" OR last_crawled_at < NOW() - INTERVAL '1 DAY'"
 
@@ -158,7 +158,7 @@ class PostgreSQLBackend(AbstractBackend):
         """
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
-        cursor.execute("UPDATE pages set queued='true' WHERE url = ANY(%s)", (urls,))
+        cursor.execute(f"UPDATE {self._urls_table} set queued='true' WHERE url = ANY(%s)", (urls,))
 
         # If not in a transaction, commit and release the connection
         if not self._in_transaction:
@@ -174,7 +174,7 @@ class PostgreSQLBackend(AbstractBackend):
         Args:
             urls (List[str]): A list of URLs to release.
         """
-        query = f"UPDATE {self._pages_table} SET queued = FALSE WHERE url = ANY(%s)"
+        query = f"UPDATE {self._urls_table} SET queued = FALSE WHERE url = ANY(%s)"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.execute(query, (urls,))
@@ -202,14 +202,14 @@ class PostgreSQLBackend(AbstractBackend):
             cursor.close()  # Close the cursor first
             self._pool.putconn(connection)  # Release the connection back to pool
 
-    def delete_pages(self, page_urls: List[str]) -> None:
+    def delete_urls(self, page_urls: List[str]) -> None:
         """
-        Deletes the specified pages from the database.
+        Deletes the specified urls from the database.
 
         Args:
             page_urls (List[str]): A list of URLs of the pages to delete.
         """
-        query = f"DELETE FROM {self._pages_table} WHERE url = ANY(%s)"
+        query = f"DELETE FROM {self._urls_table} WHERE url = ANY(%s)"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.execute(query, (page_urls,))
@@ -229,7 +229,7 @@ class PostgreSQLBackend(AbstractBackend):
         args = []
         for k, v in fail_mapping.items():
             args.append((v, k))
-        query = f"UPDATE {self._pages_table} SET failed_tries = failed_tries + %s WHERE url = %s"
+        query = f"UPDATE {self._urls_table} SET failed_tries = failed_tries + %s WHERE url = %s"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.executemany(query, args)

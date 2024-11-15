@@ -95,7 +95,7 @@ class Crawler:
         Returns:
             bool: Returns True if processing succeeded, otherwise False.
         """
-
+        old_url = None
         new_url = None
         title = None
         text = None
@@ -124,7 +124,7 @@ class Crawler:
 
         if not self.robots_manager.is_url_allowed(rules, url):
             logging.debug(f"Blocked by robots.txt: {url}")
-            self.repository.delete_page(url)
+            self.repository.delete_url(url)
             return
 
         # Fetch and process the page content
@@ -132,7 +132,7 @@ class Crawler:
 
         try:
 
-            new_url, title, text, links, metadata, redirect_type = self.fetch_and_parse_content(url)
+            new_url, title, content, links, metadata, redirect_type = self.fetch_and_parse_content(url)
 
         except playwright.sync_api.Error:
             logging.error(f"Playwright error while fetching content{url}:\n{traceback.format_exc()}")
@@ -149,11 +149,12 @@ class Crawler:
         # Handle redirects
         if new_url != url:
             if redirect_type == 301:  # Permanent redirect
-                logging.debug(f"Page URL permanently redirected, deleting: {url} -> {new_url}")
-                self.repository.delete_page(url)
+                old_url = url
+                logging.debug(f"Page URL permanently redirected, setting: {old_url} -> {new_url}")
+
             else:  # Temporary redirect
                 logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
-                new_url = url  # Use the original URL if temporary redirect
+            new_url = url  # Use the original URL if temporary redirect
 
         # Extract robots.txt directives for page processing
         noindex = "noindex" in metadata.get("robots", "").lower()
@@ -174,14 +175,24 @@ class Crawler:
         links = self.filter_links(links, domain, rules)
 
         # Handle "nosnippet" and generate the best snippet
-        snippet = None if nosnippet else self.generate_best_snippet(text, title, max_snippet_value)
+        snippet = None if nosnippet else self.generate_best_snippet(content, title, max_snippet_value)
 
         # Insert data into the repository
         description = metadata.get("description", snippet)
 
-        title, description, text, metadata = self.sanitize_data(title, description, text, metadata)
+        title, description, content, metadata = self.sanitize_data(title, description, content, metadata)
 
-        self.repository.insert_page_data(new_url, title, description, text, metadata, links)
+        data = {
+            "url": new_url,
+            "old_url": old_url,
+            "title": title,
+            "description": description,
+            "content": content,
+            "metadata": metadata,
+            "links": links
+        }
+
+        self.repository.insert_page_data(data)
 
         logging.debug("Page was put in queue")
         return True

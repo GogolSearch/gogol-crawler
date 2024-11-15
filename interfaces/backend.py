@@ -89,7 +89,7 @@ class AbstractBackend(ABC):
         pass
 
     @abstractmethod
-    def delete_pages(self, page_urls: List[str]) -> None:
+    def delete_urls(self, page_urls: List[str]) -> None:
         """
         Deletes a page from the backend implementations.
 

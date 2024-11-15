@@ -2,6 +2,7 @@ import logging
 import time
 import traceback
 import uuid
+from typing import Dict
 
 import psycopg
 import redis
@@ -87,7 +88,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
     def _batch_deletion_candidates(self, deletion_candidates):
         logging.debug("Batch deleting deletion candidates.")
         deletion_candidates_start = time.time()
-        self._backend.delete_pages(deletion_candidates)
+        self._backend.delete_urls(deletion_candidates)
         deletion_candidates_end = time.time()
         logging.info(f"Successfully deleted {len(deletion_candidates)} URLs in {deletion_candidates_end - deletion_candidates_start} seconds..")
 
@@ -155,24 +156,16 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 logging.debug("Lock released after batch operation.")
         return succeed
 
-    def insert_page_data(self, url, title, description, content, metadata, links):
+    def insert_page_data(self, page_data : Dict):
         """Buffers insert operation in Redis and executes bulk insert when buffer is full."""
-        data = {
-            "url": url,
-            "title": title,
-            "description": description,
-            "content": content,
-            "metadata": metadata,
-            "links": links
-        }
 
-        self._cache.add_page(data)
-        self._cache.remove_failed_try(url)
-        self._cache.remove_deletion_candidate(url)
+        self._cache.add_page(page_data)
+        self._cache.remove_failed_try(page_data["url"])
+        self._cache.remove_deletion_candidate(page_data["url"])
         if self._cache.get_pages_count() >= self._batch_size:
             self._batch()
 
-    def delete_page(self, *urls):
+    def delete_url(self, *urls):
         """Buffers delete operation in Redis and executes bulk delete when buffer is full."""
 
         self._cache.add_deletion_candidate(*urls)

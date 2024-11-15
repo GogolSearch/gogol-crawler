@@ -6,12 +6,12 @@ class AbstractCrawlDataRepository(ABC):
     """Répertoire des données de crawl qui encapsule toutes les interactions avec les données"""
 
     @abstractmethod
-    def insert_page_data(self, url : str, title :str, description : str, content : str, metadata : Dict, links : List):
+    def insert_page_data(self, page_data : Dict):
         """Buffers insert operation in Redis and executes bulk insert when buffer is full."""
         pass
 
     @abstractmethod
-    def delete_page(self, *urls : str):
+    def delete_url(self, *urls : str):
         pass
 
     @abstractmethod
