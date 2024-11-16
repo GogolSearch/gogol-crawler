@@ -58,7 +58,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                     self._backend.release_urls(urls)
             else:
                 logging.debug(f"Lock is already held while trying in _release_urls operation. token : {self._token}")
-        except psycopg.Error:
+        except psycopg.errors.Error:
             self._cache.put_url(*tuple(urls))
             logging.error(f"Could not clear urls:\n{traceback.format_exc()}")
         finally:
@@ -139,8 +139,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 succeed = True
             else:
                 logging.debug(f"Lock is already held while trying in batch operation. token : {self._token}")
-
-        except psycopg.Error as e:
+        except psycopg.errors.Error:
             logging.error(f"Could not batch:\n{traceback.format_exc()}")
             self._backend.end_transaction(commit=False)
             if pages:
@@ -217,7 +216,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 logging.error(f"Redis error while replenishing queue propagating error")
                 raise e
 
-            except psycopg.Error:
+            except psycopg.errors.Error:
                 if self._backend.in_transaction():
                     self._backend.end_transaction(commit=False)
             finally:

@@ -297,6 +297,7 @@ class Crawler:
                 for a in page.query_selector_all('a[href]')
                 if a.get_attribute('href')  # Include only links that have a 'href' attribute
             ]
+            links = [l for l in links if len(l) <= 2048]
 
             return new_url, title, text, links, metadata, redirect_type
 
