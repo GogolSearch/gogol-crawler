@@ -43,7 +43,7 @@ class RobotsTxtManager:
 
             # Cache with expiration (crawl delay or None)
             crawl_delay = rp.crawl_delay(self.user_agent)
-            self.cache.set_robots_txt_content(domain, robots_txt, ex=crawl_delay)
+            self.cache.set_robots_txt_content(domain, robots_txt, ex=int(crawl_delay))
             return rp
         else:
             logging.warning(f"Failed to fetch robots.txt for {domain}: HTTP {response.status_code}")
