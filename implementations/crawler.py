@@ -50,8 +50,9 @@ class Crawler:
         self.config = config
         self.seed_list = seed_list
         self.repository = repository
-        self.rate_limiter = RateLimiter(cache, self.config["crawler_default_delay"])
         self.robots_manager = RobotsTxtManager(cache, self.config["browser_user_agent"])
+        self.rate_limiter = RateLimiter(cache, self.robots_manager, self.config["crawler_default_delay"])
+
 
         # Default keys and parameters
         self.max_description_length = config["crawler_max_description_length"]  # Maximum length for extracted descriptions
