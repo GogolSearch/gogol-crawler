@@ -101,13 +101,3 @@ class AbstractCache(ABC):
     def get_next_crawl_time(self, domain: str) -> Optional[float]:
         """Get the next allowed crawl time for a specific domain."""
         pass
-
-    @abstractmethod
-    def set_crawl_delay(self, domain: str, delay: int):
-        """Store the crawl delay for a specific domain."""
-        pass
-
-    @abstractmethod
-    def get_crawl_delay(self, domain: str) -> Optional[int]:
-        """Retrieve the crawl delay for a specific domain."""
-        pass

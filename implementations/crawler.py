@@ -116,15 +116,14 @@ class Crawler:
 
         # Check robots.txt rules for the domain
         try:
-            rules = self.robots_manager.get_rules(domain)
+            allowed = self.robots_manager.is_url_allowed(domain, url)
+            if not allowed:
+                logging.debug(f"Blocked by robots.txt: {url}")
+                self.repository.delete_url(url)
+                return
         except (requests.exceptions.InvalidURL, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             logging.error(f"Connection error or invalid URL for {url}:\n{traceback.format_exc()}")
             self.repository.add_failed_try(url)
-            return
-
-        if not self.robots_manager.is_url_allowed(rules, url):
-            logging.debug(f"Blocked by robots.txt: {url}")
-            self.repository.delete_url(url)
             return
 
         # Fetch and process the page content
@@ -172,7 +171,7 @@ class Crawler:
             links = []  # Clear all links if nofollow is present
 
         # Filter links based on robots.txt rules and domain
-        links = self.filter_links(links, domain, rules)
+        links = self.filter_links(links, domain)
 
         # Handle "nosnippet" and generate the best snippet
         snippet = None if nosnippet else self.generate_best_snippet(content, title, max_snippet_value)
@@ -202,7 +201,7 @@ class Crawler:
         logging.debug("Page was put in queue")
         return True
 
-    def filter_links(self, links, current_domain, current_rules : List):
+    def filter_links(self, links, current_domain):
         """
         Filters links based on regex and robots.txt rules for links belonging to the same domain.
 
@@ -220,7 +219,7 @@ class Crawler:
             if re.match(regex, link):
                 link_domain = urlparse(link).netloc
                 if link_domain == current_domain:  # Check only links on the same domain
-                    if self.robots_manager.is_url_allowed(current_rules, link):
+                    if self.robots_manager.is_url_allowed(current_domain, link):
                         filtered_links.append(link)
                 else:
                     filtered_links.append(link)  # Add links from other domains without checking

@@ -6,3 +6,4 @@ playwright~=1.48.0
 psycopg-pool~=3.2.3
 psycopg[binary]~=3.2.3
 click~=8.1.7
+protego~=0.3.1

@@ -1,132 +1,81 @@
-import logging
-import traceback
-from typing import List, Tuple, Optional
-from urllib.parse import urlparse
-
+from protego import Protego
 import requests
-from click import Tuple
-
-from interfaces import AbstractCache
-
+import logging
+from typing import Optional, List, Union, NamedTuple
 
 class RobotsTxtManager:
     """
-    Manages rules from a domain's robots.txt file, including caching the content
-    and processing disallow and allow rules.
-
-    Attributes:
-        cache (AbstractCache): Cache repository for storing and retrieving robots.txt data.
+    Manages rules from a domain's robots.txt file using the Protego library.
     """
 
-    def __init__(self, cache: AbstractCache, user_agent : str):
+    def __init__(self, cache, user_agent: str):
         """
-        Initializes the robots.txt manager.
+        Initializes the RobotsTxtManager.
 
         Args:
-            cache (AbstractCache): Cache repository to store robots.txt data.
-            user_agent (str): The bot user agent
+            cache: Cache repository to store robots.txt data.
+            user_agent (str): The bot's user agent.
         """
         self.cache = cache
         self.user_agent = user_agent
 
-    def get_rules(self, domain : str) -> List[tuple[str,str]]:
+    def get_robots(self, domain: str) -> Optional[Protego]:
         """
-        Retrieves and parses the robots.txt rules for a domain.
-        If the content is not cached, fetches it via HTTP and caches it.
+        Retrieves and parses the robots.txt for the given domain.
 
         Args:
-            domain (str): Domain name for which to retrieve the rules.
+            domain (str): The domain to fetch robots.txt for.
 
         Returns:
-            list: List of rules as tuples ("disallow"/"allow", path).
+            Protego: Parsed Protego object if successful, None otherwise.
         """
-        parsed_rules = []
-        robots_txt_content = self.cache.get_robots_txt_content(domain)
-        if not robots_txt_content:
-            robots_txt_content = self.fetch_robots_txt(domain)
-        if robots_txt_content:
-            self.cache.set_robots_txt_content(domain, robots_txt_content)
-            self.cache_crawl_delay(robots_txt_content, domain)
-            parsed_rules = self.parse_rules(robots_txt_content)
-        return parsed_rules
+        # Check cache
+        cached_robots = self.cache.get_robots_txt_content(domain)
+        if cached_robots:
+            return Protego.parse(cached_robots)
 
-    @staticmethod
-    def fetch_robots_txt(domain : str) -> Optional[str]:
-        """
-        Fetches the robots.txt content for a domain.
-
-        Args:
-            domain (str): Domain name for which to retrieve the robots.txt file.
-
-        Returns:
-            str: Content of the robots.txt file, or an empty string in case of an error.
-        """
-        response = requests.get(f"http://{domain}/robots.txt", timeout=5)
+        # Fetch robots.txt
+        robots_url = f"http://{domain}/robots.txt"
+        response = requests.get(robots_url, timeout=5)
         if response.status_code == 200:
-            return response.text
+            robots_txt = response.text
+            rp = Protego.parse(robots_txt)
+
+            # Cache with expiration (crawl delay or None)
+            crawl_delay = rp.crawl_delay(self.user_agent)
+            self.cache.set_robots_txt_content(domain, robots_txt, ex=crawl_delay)
+            return rp
         else:
-            logging.warning(f"No accessible robots.txt for {domain}")
+            logging.warning(f"Failed to fetch robots.txt for {domain}: HTTP {response.status_code}")
         return None
 
-    def cache_crawl_delay(self, robots_txt_content : str, domain : str) -> None:
+    def is_url_allowed(self, domain: str, url: str) -> bool:
         """
-        Extracts and caches the "crawl-delay" value from the robots.txt file, if present.
+        Determines if a URL is allowed based on robots.txt rules.
 
         Args:
-            robots_txt_content (str): Content of the robots.txt file.
-            domain (str): Domain name for which to set the crawl delay.
-        """
-        for line in robots_txt_content.splitlines():
-            if line.lower().startswith("crawl-delay:"):
-                try:
-                    crawl_delay = int(line.split(":", 1)[1].strip())
-                    self.cache.set_crawl_delay(domain, crawl_delay)
-                except ValueError:
-                    logging.warning(f"Invalid crawl-delay value in robots.txt for {domain}")
-
-    def parse_rules(self, robots_txt_content : str) -> List[tuple[str, str]]:
-        """
-        Parses allow and disallow rules from robots.txt content.
-
-        Args:
-            robots_txt_content (str): Content of the robots.txt file.
-
-        Returns:
-            list: List of rules as tuples ("disallow"/"allow", path).
-        """
-        rules = []
-        user_agent = "*"
-
-        for line in robots_txt_content.splitlines():
-            line = line.strip()
-            if line.startswith("User-agent:"):
-                user_agent = line.split(":", 1)[1].strip().lower()
-            elif line.startswith("Disallow:") and user_agent in ("*", self.user_agent):
-                path = line.split(":", 1)[1].strip()
-                rules.append(("disallow", path))
-            elif line.startswith("Allow:") and user_agent in ("*", self.user_agent):
-                path = line.split(":", 1)[1].strip()
-                rules.append(("allow", path))
-
-        return rules
-
-    @staticmethod
-    def is_url_allowed(rules : list[tuple[str, str]], url : str) -> bool:
-        """
-        Determines if a URL is allowed based on the provided rules.
-
-        Args:
-            rules (list[tuple[str,str]]): List of rules as tuples ("disallow"/"allow", path).
-            url (str): URL to check.
+            domain (str): The domain to check.
+            url (str): The URL to check.
 
         Returns:
             bool: True if the URL is allowed, False otherwise.
         """
-        url_path = urlparse(url).path
-        is_allowed = True  # By default, access is allowed
+        robots = self.get_robots(domain)
+        if not robots:
+            return True  # Default to allowing access if robots.txt can't be fetched
+        return robots.can_fetch(url, self.user_agent)
 
-        for rule_type, path in rules:
-            if url_path.startswith(path):
-                is_allowed = rule_type == "allow"
+    def get_crawl_delay(self, domain: str) -> Optional[float]:
+        """
+        Retrieves the crawl delay for the domain.
 
-        return is_allowed
+        Args:
+            domain (str): The domain to check.
+
+        Returns:
+            Optional[float]: The crawl delay in seconds, or None if not specified.
+        """
+        robots = self.get_robots(domain)
+        if robots:
+            return robots.crawl_delay(self.user_agent)
+        return None

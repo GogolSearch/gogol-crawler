@@ -176,9 +176,9 @@ class RedisCache(AbstractCache):
         return self._redis_client.llen(self._failed_tries_list_key)
 
     # Domain-specific data management
-    def set_robots_txt_content(self, domain: str, robots_txt: str):
+    def set_robots_txt_content(self, domain: str, robots_txt: str, ex=None):
         robots_key = f"{self._robots_key_prefix}:{domain}"
-        self._redis_client.set(robots_key, robots_txt, ex=self._robots_cache_ttl)
+        self._redis_client.set(robots_key, robots_txt, ex=ex or self._robots_cache_ttl)
 
     def get_robots_txt_content(self, domain: str) -> Optional[str]:
         robots_key = f"{self._robots_key_prefix}:{domain}"
@@ -193,15 +193,3 @@ class RedisCache(AbstractCache):
     def get_next_crawl_time(self, domain: str) -> Optional[int]:
         next_crawl_key = f"{self._domain_next_crawl_key_prefix}:{domain}"
         return self._redis_client.get(next_crawl_key)
-
-    def set_crawl_delay(self, domain: str, delay: int):
-        crawl_delay_key = f"{self._domain_crawl_delay_key_prefix}:{domain}"
-        ttl = delay + 300
-        if delay > self._max_in_memory_time:
-            ttl = self._robots_cache_ttl
-        self._redis_client.set(crawl_delay_key, delay, ex=ttl)
-
-    def get_crawl_delay(self, domain: str) -> Optional[int]:
-        crawl_delay_key = f"{self._domain_crawl_delay_key_prefix}:{domain}"
-        return self._redis_client.get(crawl_delay_key)
-
