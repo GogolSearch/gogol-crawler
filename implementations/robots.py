@@ -32,6 +32,8 @@ class RobotsTxtManager:
         # Check cache
         cached_robots = self.cache.get_robots_txt_content(domain)
         if cached_robots:
+            if cached_robots == "<nil>":
+                return None
             return Protego.parse(cached_robots)
 
         # Fetch robots.txt
@@ -47,6 +49,7 @@ class RobotsTxtManager:
             self.cache.set_robots_txt_content(domain, robots_txt, ex=ex)
             return rp
         else:
+            self.cache.set_robots_txt_content(domain, "<nil>", ex=None)
             logging.warning(f"Failed to fetch robots.txt for {domain}: HTTP {response.status_code}")
         return None
 
