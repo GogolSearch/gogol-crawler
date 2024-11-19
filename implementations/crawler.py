@@ -97,6 +97,7 @@ class Crawler:
             bool: Returns True if processing succeeded, otherwise False.
         """
         old_url = None
+        canonical_url = None
         new_url = None
         title = None
         text = None
@@ -132,7 +133,7 @@ class Crawler:
 
         try:
 
-            new_url, title, content, links, metadata, redirect_type = self.fetch_and_parse_content(url)
+            new_url, title, content, links, metadata, redirect_type, canonical = self.fetch_and_parse_content(url)
 
         except playwright.sync_api.Error:
             logging.error(f"Playwright error while fetching content{url}:\n{traceback.format_exc()}")
@@ -156,6 +157,11 @@ class Crawler:
                 logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
             new_url = url  # Use the original URL if temporary redirect
 
+        canonicals = self.filter_links([canonical], domain)
+        if canonicals:
+            canonical_url = canonicals[0]
+
+
         # Extract robots.txt directives for page processing
         noindex = "noindex" in metadata.get("robots", "").lower()
         nofollow = "nofollow" in metadata.get("robots", "").lower()
@@ -174,6 +180,7 @@ class Crawler:
         # Filter links based on robots.txt rules and domain
         links = self.filter_links(links, domain)
 
+
         # Handle "nosnippet" and generate the best snippet
         snippet = None if nosnippet else self.generate_best_snippet(content, title, max_snippet_value)
 
@@ -190,6 +197,7 @@ class Crawler:
         data = {
             "url": new_url,
             "old_url": old_url,
+            "canonical_url": canonical_url,
             "title": title,
             "description": description,
             "content": content,
@@ -242,6 +250,7 @@ class Crawler:
                 - links (list): A list of links extracted from the page.
                 - metadata (dict): A dictionary containing metadata extracted from the page.
                 - redirect_type (int or None): The type of HTTP redirection (if any).
+                - canonical (str or None): The canonical link of the page, if present.
 
         Raises:
             Exception: If an error occurs during the download or processing of the page.
@@ -299,7 +308,11 @@ class Crawler:
             ]
             links = [l for l in links if len(l) <= 2048]
 
-            return new_url, title, text, links, metadata, redirect_type
+            # Extract the canonical link
+            canonical_element = page.query_selector('link[rel="canonical"]')
+            canonical = urljoin(new_url, canonical_element.get_attribute('href')) if canonical_element else None
+
+            return new_url, title, text, links, metadata, redirect_type, canonical
 
         finally:
             page.close()
