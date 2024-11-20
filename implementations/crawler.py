@@ -193,17 +193,14 @@ class Crawler:
             "url": new_url,
             "old_url": old_url,
             "canonical_url": canonical_url,
+            "redirect_type": redirect_type,
             "title": title,
             "description": description,
             "content": content,
             "metadata": metadata,
             "links": links
         }
-
-        logging.debug(f"About to put in page list : {data}")
-
         self.repository.insert_page_data(data)
-
         logging.debug("Page was put in page list")
         return True
 
