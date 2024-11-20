@@ -206,9 +206,11 @@ class Crawler:
             "links": links
         }
 
+        logging.debug("About to put in page list : ", data)
+
         self.repository.insert_page_data(data)
 
-        logging.debug("Page was put in queue")
+        logging.debug("Page was put in page list")
         return True
 
     def filter_links(self, links, current_domain):
