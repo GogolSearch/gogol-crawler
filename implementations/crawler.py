@@ -201,6 +201,7 @@ class Crawler:
             "links": links
         }
         self.repository.insert_page_data(data)
+
         logging.debug("Page was put in page list")
         return True
 
@@ -256,20 +257,13 @@ class Crawler:
         redirect_type = None  # Initialize the redirect type
 
         try:
-            # Function to intercept HTTP requests and detect redirects
-            def handle_route(route, request):
+            # Create a response handler to catch redirects and their status codes
+            def handle_response(r):
                 nonlocal redirect_type
+                if r.status in [301, 302, 303, 307, 308]:  # Check for redirects
+                    redirect_type = r.status
 
-                if route.response:
-                    # If the response is a redirect (HTTP code in the 3xx range), capture the redirect type
-                    if 300 <= route.response.status < 400:
-                        redirect_type = route.response.status
-                route.continue_()  # Continue the request (even after interception)
-
-            # Add the route handler to capture responses
-            page.on('route', handle_route)
-
-            # Navigate to the URL
+            page.on("response", handle_response)
             response = page.goto(url)
 
             # Wait for the page to fully load

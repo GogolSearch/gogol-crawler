@@ -14,6 +14,16 @@ from implementations.lock import RedisLock
 from implementations.repository import CrawlDataRepository
 from implementations import RedisCache, PostgreSQLBackend
 
+def str_to_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in {'true', 't', 'yes', 'y', '1'}:
+        return True
+    elif value.lower() in {'false', 'f', 'no', 'n', '0'}:
+        return False
+    else:
+        raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+
 def get_env_variable(name, default=None) -> Any:
     """Helper to fetch environment variables with optional defaults."""
     return os.environ.get(name, default)
@@ -159,7 +169,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--browser_headless",
-        type=bool,
+        type=str_to_bool,
         default=browser_headless
     )
 
@@ -183,7 +193,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--browser_remote",
-        type=bool,
+        type=str_to_bool,
         default=get_env_variable('BROWSER_REMOTE', default="false").lower() in ['true']
     )
 
