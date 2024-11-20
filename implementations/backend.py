@@ -132,7 +132,7 @@ class PostgreSQLBackend(AbstractBackend):
             List[str]: A list of URLs fetched from the database.
         """
         query = f"SELECT url FROM {self._urls_table} WHERE last_crawled_at IS NULL"
-        if self._queued_counter % 5 == 0:
+        if self._queued_counter % 3 == 0:
             query += f" OR last_crawled_at < NOW() - INTERVAL '1 DAY'"
 
         query += " ORDER BY id LIMIT %s"
