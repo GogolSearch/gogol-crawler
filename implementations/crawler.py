@@ -96,9 +96,8 @@ class Crawler:
         Returns:
             bool: Returns True if processing succeeded, otherwise False.
         """
-        old_url = None
+        destination_url = None
         canonical_url = None
-        new_url = None
         title = None
         text = None
         links = None
@@ -133,7 +132,7 @@ class Crawler:
 
         try:
 
-            new_url, title, content, links, metadata, redirect_type, canonical = self.fetch_and_parse_content(url)
+            destination_url, title, content, links, metadata, redirect_type, canonical_url = self.fetch_and_parse_content(url)
 
         except playwright.sync_api.Error:
             logging.error(f"Playwright error while fetching content{url}:\n{traceback.format_exc()}")
@@ -147,20 +146,9 @@ class Crawler:
 
         logging.debug("Successfully fetched content.")
 
-        # Handle redirects
-        if new_url != url:
-            if redirect_type == 301:  # Permanent redirect
-                old_url = url
-                logging.debug(f"Page URL permanently redirected, setting: {old_url} -> {new_url}")
-
-            else:  # Temporary redirect
-                logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
-            new_url = url  # Use the original URL if temporary redirect
-
-        canonicals = self.filter_links([canonical], domain)
-        if canonicals:
-            canonical_url = canonicals[0]
-
+        filtered_canonical = self.filter_links([canonical_url], domain)
+        if filtered_canonical:
+            canonical_url = filtered_canonical[0]
 
         # Extract robots.txt directives for page processing
         noindex = "noindex" in metadata.get("robots", "").lower()
@@ -194,20 +182,23 @@ class Crawler:
             self.repository.add_failed_try(url)
             return
 
+
         data = {
-            "url": new_url,
-            "old_url": old_url,
+            "url": url,
+            "destination_url": destination_url,
             "canonical_url": canonical_url,
+            "redirect_type": redirect_type if url != destination_url else None,
             "title": title,
             "description": description,
             "content": content,
             "metadata": metadata,
             "links": links
         }
+        logging.debug("About to put in page list : ", data)
 
         self.repository.insert_page_data(data)
 
-        logging.debug("Page was put in queue")
+        logging.debug("Page was put in page list")
         return True
 
     def filter_links(self, links, current_domain):
