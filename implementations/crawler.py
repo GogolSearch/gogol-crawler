@@ -148,15 +148,9 @@ class Crawler:
 
         logging.debug("Successfully fetched content.")
 
-        # Handle redirects
         if new_url != url:
-            if redirect_type == 301:  # Permanent redirect
-                old_url = url
-                logging.debug(f"Page URL permanently redirected, setting: {old_url} -> {new_url}")
+            old_url = url
 
-            else:  # Temporary redirect
-                logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
-            new_url = url  # Use the original URL if temporary redirect
         if canonical:
             canonicals = self.filter_links([canonical], domain)
         if canonicals:
@@ -206,7 +200,7 @@ class Crawler:
             "links": links
         }
 
-        logging.debug("About to put in page list : ", data)
+        logging.debug(f"About to put in page list : {data}")
 
         self.repository.insert_page_data(data)
 
