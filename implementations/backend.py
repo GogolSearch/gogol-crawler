@@ -120,7 +120,7 @@ class PostgreSQLBackend(AbstractBackend):
         else:
             return connection.cursor()
 
-    def get_urls(self, batch_size: int, recrawl=False) -> List[str]:
+    def get_urls(self, batch_size: int) -> List[str]:
         """
         Retrieves a list of URLs from the database that have not been crawled or
         have been crawled more than a day ago.
