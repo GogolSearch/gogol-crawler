@@ -98,6 +98,7 @@ class Crawler:
         """
         old_url = None
         canonical_url = None
+        canonicals = None
         new_url = None
         title = None
         text = None
@@ -156,8 +157,8 @@ class Crawler:
             else:  # Temporary redirect
                 logging.debug(f"Page URL temporarily redirected from {url} to {new_url}")
             new_url = url  # Use the original URL if temporary redirect
-
-        canonicals = self.filter_links([canonical], domain)
+        if canonical:
+            canonicals = self.filter_links([canonical], domain)
         if canonicals:
             canonical_url = canonicals[0]
 
