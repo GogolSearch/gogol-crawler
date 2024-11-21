@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from interfaces import AbstractBackend
@@ -131,11 +132,11 @@ class PostgreSQLBackend(AbstractBackend):
         Returns:
             List[str]: A list of URLs fetched from the database.
         """
-        query = f"SELECT url FROM {self._urls_table} WHERE last_crawled_at IS NULL"
+        query = f"SELECT url FROM {self._urls_table} WHERE queued = 'false' AND (last_crawled_at IS NULL"
         if self._queued_counter % 3 == 0:
             query += f" OR last_crawled_at < NOW() - INTERVAL '1 DAY'"
 
-        query += " ORDER BY id LIMIT %s"
+        query += ") ORDER BY id LIMIT %s"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.execute(query, (batch_size,))
@@ -158,7 +159,7 @@ class PostgreSQLBackend(AbstractBackend):
         """
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
-        cursor.execute(f"UPDATE {self._urls_table} set queued='true' WHERE url = ANY(%s)", (urls,))
+        cursor.execute(f"UPDATE {self._urls_table} set queued = 'true' WHERE url = ANY(%s)", (urls,))
 
         # If not in a transaction, commit and release the connection
         if not self._in_transaction:
@@ -174,7 +175,7 @@ class PostgreSQLBackend(AbstractBackend):
         Args:
             urls (List[str]): A list of URLs to release.
         """
-        query = f"UPDATE {self._urls_table} SET queued = FALSE WHERE url = ANY(%s)"
+        query = f"UPDATE {self._urls_table} SET queued = 'false' WHERE url = ANY(%s)"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.execute(query, (urls,))

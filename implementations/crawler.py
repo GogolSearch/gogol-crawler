@@ -185,7 +185,7 @@ class Crawler:
         title, description, content, metadata = self.sanitize_data(title, description, content, metadata)
 
         if content is None:
-            logging.error(f"Description or content was None for {url} adding a failed try.")
+            logging.error(f"Content was None for {url} adding a failed try.")
             self.repository.add_failed_try(url)
             return
 
