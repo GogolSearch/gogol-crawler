@@ -17,6 +17,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
             cache: AbstractCache,
             backend: AbstractBackend,
             lock : AbstractLock,
+            token: str,
             batch_size : int,
             queue_min_size : int,
             failed_tries_max_size : int,
@@ -29,7 +30,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         self._cache = cache
         self._backend = backend
         self._lock = lock
-        self._token = str(uuid.uuid1())
+        self._token = token
 
         self._batch_size = batch_size
         self._min_queue_size = queue_min_size

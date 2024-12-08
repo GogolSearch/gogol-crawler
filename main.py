@@ -4,6 +4,7 @@ import sys
 
 import logging
 import argparse
+import uuid
 from typing import Any
 
 import psycopg_pool
@@ -301,19 +302,29 @@ def main() -> None:
         config["cache_max_in_memory_time"],
     )
 
+
+    token = str(uuid.uuid1())
+
     backend = PostgreSQLBackend(pool)
     lock = RedisLock(redis_client, config["lock_name"])
     cdr = CrawlDataRepository(
         cache,
         backend,
         lock,
+        token,
         config["crawler_batch_size"],
         config["crawler_queue_min_size"],
         config["crawler_failed_tries_max_size"],
         config["crawler_deletion_candidates_max_size"],
-        )
+    )
     robots = RobotsTxtManager(cache, config["browser_user_agent"])
-    rate_limiter = RateLimiter(cache, robots, config["crawler_default_delay"], lambda domain : RedisLock(redis_client, config["domain_lock_prefix"] + ":" + domain))
+    rate_limiter = RateLimiter(
+        cache,
+        robots,
+        token,
+        config["crawler_default_delay"],
+        lambda domain : RedisLock(redis_client, config["domain_lock_prefix"] + ":" + domain)
+    )
 
     # Define seed list for crawling
     seed_list = [

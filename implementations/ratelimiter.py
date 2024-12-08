@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Callable
 
@@ -11,16 +12,18 @@ class RateLimiter(AbstractRateLimiter):
     Manages rate limiting for domains, determining the wait time before the next allowed request.
 
     Attributes:
-        cache (AbstractCache): Interface to access the cache, where rate limit information is stored.
-        robots (RobotsTxtManager): Manager for robots.txt rules, including crawl delays.
-        default_delay (int): Default delay in seconds between requests for a domain if no specific delay is defined.
-        lock_factory (Callable[[str], AbstractLock]): Factory function to create locks for domains.
+        _cache (AbstractCache): Interface to access the cache, where rate limit information is stored.
+        _robots (RobotsTxtManager): Manager for robots.txt rules, including crawl delays.
+        _token (str): the token for locks.
+        _default_delay (int): Default delay in seconds between requests for a domain if no specific delay is defined.
+        _lock_factory (Callable[[str], AbstractLock]): Factory function to create locks for domains.
     """
 
     def __init__(
         self,
         cache: AbstractCache,
         robots: AbstractRobotsTxtManager,
+        token : str,
         default_delay: int,
         lock_factory: Callable[[str], AbstractLock]
     ):
@@ -30,15 +33,17 @@ class RateLimiter(AbstractRateLimiter):
         Args:
             cache (AbstractCache): Cache repository for storing rate-limiting data.
             robots (AbstractRobotsTxtManager): Manager for robots.txt rules, including crawl delays.
+            token (str): the token for locks.
             default_delay (int): Default delay in seconds between requests if no other delay is specified.
             lock_factory (Callable[[str], AbstractLock]): Factory function for creating locks.
         """
         if not callable(lock_factory):
             raise ValueError("lock_factory must be a callable that returns an AbstractLock.")
-        self.cache = cache
-        self.robots = robots
-        self.default_delay = default_delay
-        self.lock_factory = lock_factory
+        self._cache = cache
+        self._robots = robots
+        self._token = token
+        self._default_delay = default_delay
+        self._lock_factory = lock_factory
 
     def can_request(self, domain: str) -> bool:
         """
@@ -51,11 +56,16 @@ class RateLimiter(AbstractRateLimiter):
         Returns:
             bool: True if the request is allowed, False otherwise.
         """
-        lock = self.lock_factory(domain)  # Create or retrieve a lock for the domain
+        lock = self._lock_factory(domain)  # Create or retrieve a lock for the domain
+
+        # Mitigation if somehow lock wasn't properly released by this crawler instance
+        if lock.owned():
+            lock.release()
+            logging.debug("Released lock in ratelimiter operation, lock was already owned")
 
         try:
             # Attempt to acquire the lock, blocking until it is available
-            if not lock.acquire(blocking=False):
+            if not lock.acquire(blocking=False, token=self._token):
                 return False
 
             # Critical section: Check and update the rate-limiting cache
@@ -76,7 +86,7 @@ class RateLimiter(AbstractRateLimiter):
         Returns:
             bool: True if the request is allowed, False otherwise.
         """
-        next_allowed_request_time = self.cache.get_next_crawl_time(domain)
+        next_allowed_request_time = self._cache.get_next_crawl_time(domain)
         current_time = time.time()
 
         # Deny the request if a wait time is set and hasn't been reached yet
@@ -84,7 +94,7 @@ class RateLimiter(AbstractRateLimiter):
             return False
 
         # Allow the request and set the next wait time based on crawl-delay or default delay
-        crawl_delay = self.robots.get_crawl_delay(domain)
-        delay = crawl_delay if crawl_delay else self.default_delay
-        self.cache.set_next_crawl_time(domain, float(current_time) + float(delay), ex=int(delay))
+        crawl_delay = self._robots.get_crawl_delay(domain)
+        delay = crawl_delay if crawl_delay else self._default_delay
+        self._cache.set_next_crawl_time(domain, float(current_time) + float(delay), ex=int(delay))
         return True
