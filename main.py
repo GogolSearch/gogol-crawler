@@ -11,8 +11,11 @@ import redis
 
 from implementations.crawler import Crawler
 from implementations.lock import RedisLock
+from implementations.ratelimiter import RateLimiter
 from implementations.repository import CrawlDataRepository
 from implementations import RedisCache, PostgreSQLBackend
+from implementations.robots import RobotsTxtManager
+
 
 def str_to_bool(value):
     if isinstance(value, bool):
@@ -203,6 +206,12 @@ def parse_args() -> argparse.Namespace:
         default=get_env_variable('LOCK_NAME', default="crawler:db_lock")
     )
 
+    parser.add_argument(
+        "--domain_lock_prefix",
+        type=str,
+        default=get_env_variable('DOMAIN_LOCK_PREFIX', default="crawler:domain_lock")
+    )
+
     # Cache arguments
     parser.add_argument(
         "--cache_url_queue_key",
@@ -303,6 +312,8 @@ def main() -> None:
         config["crawler_failed_tries_max_size"],
         config["crawler_deletion_candidates_max_size"],
         )
+    robots = RobotsTxtManager(cache, config["browser_user_agent"])
+    rate_limiter = RateLimiter(cache, robots, config["crawler_default_delay"], lambda domain : RedisLock(redis_client, config["domain_lock_prefix"] + ":" + domain))
 
     # Define seed list for crawling
     seed_list = [
@@ -316,7 +327,7 @@ def main() -> None:
         "https://www.medium.com",
         "https://www.imdb.com",
     ]
-    c = Crawler(cdr, cache, seed_list, config)
+    c = Crawler(cdr, rate_limiter, robots, seed_list, config)
 
     configure_signal_handlers(c, redis_client, pool)
 

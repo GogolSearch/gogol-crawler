@@ -16,7 +16,8 @@ from constants import DJANGO_URL_VALIDATION
 from implementations.exceptions import HTTPError
 from implementations.ratelimiter import RateLimiter
 from implementations.robots import RobotsTxtManager
-from interfaces import AbstractCrawlDataRepository, AbstractCache
+from interfaces import AbstractCrawlDataRepository, AbstractCache, AbstractRobotsTxtManager
+from interfaces.ratelimiter import AbstractRateLimiter
 
 
 class Crawler:
@@ -28,21 +29,30 @@ class Crawler:
         config (dict): The config dictionary
         seed_list (list): Initial list of URLs or seeds for the crawler to start processing.
         repository (AbstractCrawlDataRepository): Repository instance for storing and accessing crawl data.
-        rate_limiter (RateLimiter): Manages the rate-limiting process to control request frequency.
-        robots_manager (RobotsTxtManager): Manages access to and compliance with robots.txt files.
+        rate_limiter (AbstractRateLimiter): Manages the rate-limiting process to control request frequency.
+        robots_manager (AbstractRobotsTxtManager): Manages access to and compliance with robots.txt files.
         max_description_length (int): Maximum length of text descriptions to be extracted during crawling.
         browser (Browser): Instance of the automated browser (Playwright).
         context (BrowserContext): Browser context for each session to manage browser-specific settings.
         running (bool): Flag indicating whether the crawler is actively running.
     """
 
-    def __init__(self, repository: AbstractCrawlDataRepository, cache: AbstractCache, seed_list, config):
+    def __init__(
+            self,
+            repository: AbstractCrawlDataRepository,
+            rate_limiter: AbstractRateLimiter,
+            robots_manager: AbstractRobotsTxtManager,
+            seed_list,
+
+            config):
         """
         Initializes a new Crawler instance with the specified repository, cache, and seed list.
 
         Parameters:
             repository (AbstractCrawlDataRepository): Repository for storing and retrieving crawl data.
-            cache (AbstractCache): Cache system used for managing rate limiting and other temporary data.
+            rate_limiter (AbstractRateLimiter): Manages the rate-limiting process to control request frequency.
+            robots_manager (AbstractRobotsTxtManager): Manages access to and compliance with robots.txt files.
+            rate_limiter (AbstractRateLimiter): Manages the rate-limiting process to control request frequency.
             seed_list (list): List of initial URLs or seeds for the crawler to process.
             config (dict): The configuration dictionary.
         """
@@ -50,8 +60,8 @@ class Crawler:
         self.config = config
         self.seed_list = seed_list
         self.repository = repository
-        self.robots_manager = RobotsTxtManager(cache, self.config["browser_user_agent"])
-        self.rate_limiter = RateLimiter(cache, self.robots_manager, self.config["crawler_default_delay"])
+        self.robots_manager = robots_manager
+        self.rate_limiter = rate_limiter
 
 
         # Default keys and parameters
