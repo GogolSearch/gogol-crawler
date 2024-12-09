@@ -119,23 +119,25 @@ class Crawler:
 
         domain = urlparse(url).netloc
 
-        # Check rate limiting for the domain
-        if not self.rate_limiter.can_request(domain):
-            logging.debug(f"Rate-limited, retry later: {url}")
-            self.repository.put_url(url)  # Add the URL to the queue for retry
-            return
-            
-        logging.info(f"Starting process for page {url}")
 
-        # Check robots.txt rules for the domain
         try:
+            # Check rate limiting for the domain
+            if not self.rate_limiter.can_request(domain):
+                logging.debug(f"Rate-limited, retry later: {url}")
+                self.repository.put_url(url)  # Add the URL to the queue for retry
+                return
+
+            logging.info(f"Starting process for page {url}")
+
+            # Check robots.txt rules for the domain
+
             allowed = self.robots_manager.is_url_allowed(domain, url)
             if not allowed:
                 logging.debug(f"Blocked by robots.txt: {url}")
                 self.repository.delete_url(url)
                 return
-        except (requests.exceptions.InvalidURL, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            logging.error(f"Connection error or invalid URL for {url}:\n{traceback.format_exc()}")
+        except requests.exceptions.RequestException:
+            logging.error(f"Request Exception for URL {url}:\n{traceback.format_exc()}")
             self.repository.add_failed_try(url)
             return
 
@@ -161,8 +163,12 @@ class Crawler:
         if new_url != url:
             old_url = url
 
+
         if canonical:
-            canonicals = self.filter_links([canonical], domain)
+            try:
+                canonicals = self.filter_links([canonical], domain)
+            except requests.exceptions.RequestException:
+                canonicals = []
         if canonicals:
             canonical_url = canonicals[0]
 
@@ -182,8 +188,11 @@ class Crawler:
             logging.info(f"Page marked as nofollow, removing links: {url}")
             links = []  # Clear all links if nofollow is present
 
-        # Filter links based on robots.txt rules and domain
-        links = self.filter_links(links, domain)
+        try:
+            # Filter links based on robots.txt rules and domain
+            links = self.filter_links(links, domain)
+        except requests.exceptions.RequestException:
+            links = links
 
 
         # Handle "nosnippet" and generate the best snippet
@@ -477,15 +486,11 @@ class Crawler:
 
     def stop(self):
         """
-        Stops the current crawling process, halts the browser, and clears the pages in the queue.
-
-        Ensures that the crawling operation is properly terminated, and resources such as the browser and
-        repository are cleaned up.
+        Stops the current crawling process.
         """
         self.running = False
         logging.info("Stopped main loop.")
-        self.repository.close()
-        self.close_browser()
+
 
     def run(self):
         """
@@ -503,12 +508,13 @@ class Crawler:
         self.repository.seed_if_needed(*self.seed_list)
 
         logging.debug("Main loop starting")
+        current_url = None
         while self.running:
             try:
                 logging.debug("Popping a URL")
-                url = self.repository.pop_url()
+                current_url = self.repository.pop_url()
 
-                if not url:
+                if not current_url:
                     logging.info("No URL in cache queue. Retrieving from backend.")
                     if self.repository.force_batch():
                         continue
@@ -517,15 +523,22 @@ class Crawler:
                         "now or the lock was acquired by an other crawler. Waiting...")
                     time.sleep(10)
                     continue
-
-                self.process_page(url)
-
-            except Exception:
-                logging.error(f"An Unexpected error occurred: {traceback.format_exc()}")
-                continue
+                self.process_page(current_url)
 
             except KeyboardInterrupt:
                 logging.info("Manual stop...")
+                if current_url:
+                    self.repository.put_url(current_url)
+                break
+
+            except Exception:
+                logging.error(f"An Unexpected error occurred: {traceback.format_exc()}")
+                if current_url:
+                    self.repository.add_failed_try(current_url)
                 self.stop()
 
+        # Waiting for other crawlers
+        time.sleep(12)
+        self.repository.close()
+        self.close_browser()
         logging.info("Process stopped.")

@@ -56,17 +56,11 @@ def create_redis_client(config) -> redis.Redis:
         decode_responses=True
     )
 
-def configure_signal_handlers(crawler, redis_client, pool) -> None:
+def configure_signal_handlers(crawler) -> None:
     """Set up handlers for termination signals."""
     def handle_close(s, frame):
         logging.info("Stopping...")
         crawler.stop()
-        logging.info(f"Stopped crawler {crawler}.")
-        redis_client.close()
-        logging.info("Stopped redis client.")
-        pool.close()
-        logging.info("Stopped pool.")
-        sys.exit(0)
 
     signal.signal(signal.SIGTERM, handle_close)
     signal.signal(signal.SIGINT, handle_close)
@@ -340,9 +334,15 @@ def main() -> None:
     ]
     c = Crawler(cdr, rate_limiter, robots, seed_list, config)
 
-    configure_signal_handlers(c, redis_client, pool)
+    configure_signal_handlers(c)
 
     c.run()
+    logging.info(f"Stopped crawler.")
+    redis_client.close()
+    logging.info("Stopped redis client.")
+    pool.close()
+    logging.info("Stopped pool.")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()

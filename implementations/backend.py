@@ -230,7 +230,7 @@ class PostgreSQLBackend(AbstractBackend):
         args = []
         for k, v in fail_mapping.items():
             args.append((v, k))
-        query = f"UPDATE {self._urls_table} SET failed_tries = failed_tries + %s WHERE url = %s"
+        query = f"UPDATE {self._urls_table} SET failed_tries = failed_tries + %s, queued = 'f', last_crawled_at = NOW() WHERE url = %s"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.executemany(query, args)

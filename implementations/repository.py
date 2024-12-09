@@ -134,9 +134,14 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                     self._batch_deletion_candidates(deletion_candidates)
                 else:
                     logging.debug("No deletion candidates to batch delete")
+
                 self._backend.end_transaction(commit=True)
                 end = time.time()
-                logging.info(f"Successfully realised all needed operations in {end - start} seconds.")
+
+                if pages or failed_tries or deletion_candidates:
+                    logging.info(f"Successfully realised all needed operations in {end - start} seconds.")
+                else:
+                    logging.info("No batch operations to perform")
                 succeed = True
             else:
                 logging.debug(f"Lock is already held while trying in batch operation. token : {self._token}")
