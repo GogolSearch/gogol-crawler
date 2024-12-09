@@ -44,7 +44,6 @@ class RobotsTxtManager(AbstractRobotsTxtManager):
         # Fetch robots.txt
         robots_url = f"http://{domain}/robots.txt"
         response = requests.get(robots_url, timeout=5)
-
         if response.status_code == 200:
             robots_txt = response.text
             rp = Protego.parse(robots_txt)
@@ -54,23 +53,10 @@ class RobotsTxtManager(AbstractRobotsTxtManager):
             ex = int(crawl_delay) if crawl_delay else None
             self.cache.set_robots_txt_content(domain, robots_txt, ex=ex)
             return rp
-        elif response.status_code == 429:
-            # Handle Too Many Requests by setting the next crawl time
-            retry_after = response.headers.get("Retry-After")
-            if retry_after:
-                wait_time = int(retry_after)
-            else:
-                wait_time = 60  # Default wait time if Retry-After is not provided
-
-            next_crawl_time = time.time() + wait_time
-            self.cache.set_next_crawl_time(domain, next_crawl_time, ex=wait_time)
-
-            logging.warning(f"Received 429 Too Many Requests for {domain}. Retry after {wait_time} seconds.")
-            return None
         else:
             self.cache.set_robots_txt_content(domain, "<nil>", ex=None)
             logging.warning(f"Failed to fetch robots.txt for {domain}: HTTP {response.status_code}")
-            return None
+        return None
 
     def is_url_allowed(self, domain: str, url: str) -> bool:
         """
