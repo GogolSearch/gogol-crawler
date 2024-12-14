@@ -136,7 +136,7 @@ class PostgreSQLBackend(AbstractBackend):
         if self._queued_counter % 3 == 0:
             query += f" OR last_crawled_at < NOW() - INTERVAL '1 DAY'"
 
-        query += ") ORDER BY id LIMIT %s"
+        query += ") ORDER BY RAND() LIMIT %s"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
         cursor.execute(query, (batch_size,))
