@@ -206,6 +206,7 @@ class Crawler:
         if content is None:
             logging.error(f"Content was None for {url} adding a failed try.")
             self.repository.add_failed_try(url)
+            self.repository.add_failed_try(old_url)
             return
 
         data = {
