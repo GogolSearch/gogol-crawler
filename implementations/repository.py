@@ -7,16 +7,17 @@ from typing import Dict
 import psycopg
 import redis
 
-from interfaces import AbstractCache, AbstractBackend, AbstractCrawlDataRepository, AbstractLock
+from implementations import PostgreSQLBackend, RedisLock, RedisCache
 
-class CrawlDataRepository(AbstractCrawlDataRepository):
+
+class CrawlDataRepository:
     """Répertoire des données de crawl qui encapsule toutes les interactions avec les données"""
 
     def __init__(
             self,
-            cache: AbstractCache,
-            backend: AbstractBackend,
-            lock : AbstractLock,
+            cache: RedisCache,
+            backend: PostgreSQLBackend,
+            lock : RedisLock,
             token: str,
             batch_size : int,
             queue_min_size : int,
@@ -67,8 +68,14 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 self._lock.release()
                 logging.debug("Lock released after _release_urls operation")
 
+    def _batch_release_processed_urls(self, urls):
+        logging.debug("Batch releasing processed urls")
+        page_start = time.time()
+        self._backend.release_urls(urls)
+        page_end = time.time()
+        logging.info(f"Successfully released {len(urls)} processed urls in {page_end - page_start} seconds.")
+
     def _batch_pages(self, pages):
-        logging.debug("Batch updating pages")
         logging.debug("Batch inserting pages.")
         page_start = time.time()
         self._backend.insert_pages(pages)
@@ -106,6 +113,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
         pages = []
         failed_pages = []
         deletion_candidates = []
+        processed_urls = []
 
         logging.debug("Attempting to acquire lock for batch operation.")
         try:
@@ -117,6 +125,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 pages = self._cache.pop_all_pages()
                 failed_tries = self._cache.pop_all_failed_tries()
                 deletion_candidates = self._cache.pop_all_deletion_candidates()
+                processed_urls = self._cache.pop_all_processed_urls(self._token)
 
                 self._backend.begin_transaction()
                 start = time.time()
@@ -130,6 +139,11 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 else:
                     logging.debug("No failed tries to batch update")
 
+                if processed_urls:
+                    self._batch_release_processed_urls(processed_urls)
+                else:
+                    logging.debug("No processed urls to batch release")
+
                 if deletion_candidates:
                     self._batch_deletion_candidates(deletion_candidates)
                 else:
@@ -138,7 +152,7 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 self._backend.end_transaction(commit=True)
                 end = time.time()
 
-                if pages or failed_tries or deletion_candidates:
+                if pages or failed_tries or deletion_candidates or processed_urls:
                     logging.info(f"Successfully realised all needed operations in {end - start} seconds.")
                 else:
                     logging.info("No batch operations to perform")
@@ -154,6 +168,8 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                 self._cache.add_deletion_candidate(*deletion_candidates)
             if failed_pages:
                     self._cache.add_failed_try(*failed_pages)
+            if processed_urls:
+                self._cache.add_processed_url(*processed_urls)
         finally:
             # Ensure the lock is released regardless of what happens
             if self._lock.owned():
@@ -232,7 +248,9 @@ class CrawlDataRepository(AbstractCrawlDataRepository):
                     logging.debug("Lock released after pop_url fetch operation.")
 
         logging.debug("Returning a popped URL from the cache.")
-        return self._cache.pop_url()
+        url = self._cache.pop_url()
+        self._cache.add_processed_url(url)
+        return url
 
     def put_url(self, *urls : str):
         self._cache.put_url(*urls)

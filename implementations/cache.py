@@ -1,12 +1,9 @@
 import logging
 import time
 import uuid
-from tarfile import data_filter
 from typing import Optional, List, Any
 
 import redis
-
-from interfaces import AbstractCache
 
 
 class RedisSerializer:
@@ -73,21 +70,24 @@ class RedisSerializer:
                 value = None
             return value
 
-class RedisCache(AbstractCache):
+class RedisCache:
     def __init__(
-            self, redis_client : redis.Redis,
-             url_queue_key,
-             page_list_key,
-             deletion_candidates_key,
-             failed_tries_key,
-             robots_key_prefix,
-             domain_next_crawl_key_prefix,
-             domain_crawl_delay_key_prefix,
-             robots_cache_ttl,
-             max_in_memory_time,
+            self,
+            redis_client : redis.Redis,
+            url_queue_key,
+            processed_urls_list_key,
+            page_list_key,
+            deletion_candidates_key,
+            failed_tries_key,
+            robots_key_prefix,
+            domain_next_crawl_key_prefix,
+            domain_crawl_delay_key_prefix,
+            robots_cache_ttl,
+            max_in_memory_time,
     ):
         self._redis_client = redis_client
         self._serializer = RedisSerializer(redis_client)
+        self._processed_urls_list_key = processed_urls_list_key
         self._url_queue_key = url_queue_key
         self._page_list_key = page_list_key
         self._deletion_candidates_key = deletion_candidates_key
@@ -114,6 +114,17 @@ class RedisCache(AbstractCache):
     def pop_url(self) -> Optional[List[str]]:
         return self._redis_client.rpop(self._url_queue_key)
 
+    def add_processed_url(self, *urls):
+        return self._redis_client.lpush(self._processed_urls_list_key,*urls)
+
+    def pop_all_processed_urls(self, token) -> List[str]:
+        urls = self._redis_client.lpop(
+            self._processed_urls_list_key,
+            self._redis_client.llen(self._processed_urls_list_key)
+        )
+        if not urls:
+            urls = []
+        return urls
     def pop_all_urls(self) -> List[str]:
         urls = self._redis_client.lpop(self._url_queue_key, self._redis_client.llen(self._url_queue_key))
         if not urls:

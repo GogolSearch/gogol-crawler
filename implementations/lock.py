@@ -2,9 +2,7 @@ from redis import Redis
 from redis.lock import Lock
 from typing import Optional, Union
 
-from interfaces.lock import AbstractLock
-
-class RedisLock(AbstractLock):
+class RedisLock:
     """
     A wrapper class for redis.Lock that implements the AbstractLock interface.
     """

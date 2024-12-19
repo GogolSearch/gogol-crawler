@@ -5,10 +5,8 @@ import requests
 import logging
 from typing import Optional, List, Union, NamedTuple
 
-from interfaces.robots import AbstractRobotsTxtManager
 
-
-class RobotsTxtManager(AbstractRobotsTxtManager):
+class RobotsTxtManager:
     """
     Manages rules from a domain's robots.txt file using the Protego library.
     """

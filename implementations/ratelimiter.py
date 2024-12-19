@@ -2,43 +2,43 @@ import logging
 import time
 from typing import Callable
 
+from implementations import RedisCache
+from implementations.lock import RedisLock
 from implementations.robots import RobotsTxtManager
-from interfaces import AbstractCache, AbstractLock, AbstractRobotsTxtManager
-from interfaces.ratelimiter import AbstractRateLimiter
 
 
-class RateLimiter(AbstractRateLimiter):
+class RateLimiter:
     """
     Manages rate limiting for domains, determining the wait time before the next allowed request.
 
     Attributes:
-        _cache (AbstractCache): Interface to access the cache, where rate limit information is stored.
+        _cache (RedisCache): Interface to access the cache, where rate limit information is stored.
         _robots (RobotsTxtManager): Manager for robots.txt rules, including crawl delays.
         _token (str): the token for locks.
         _default_delay (int): Default delay in seconds between requests for a domain if no specific delay is defined.
-        _lock_factory (Callable[[str], AbstractLock]): Factory function to create locks for domains.
+        _lock_factory (Callable[[str], RedisLock]): Factory function to create locks for domains.
     """
 
     def __init__(
         self,
-        cache: AbstractCache,
-        robots: AbstractRobotsTxtManager,
+        cache: RedisCache,
+        robots: RobotsTxtManager,
         token : str,
         default_delay: int,
-        lock_factory: Callable[[str], AbstractLock]
+        lock_factory: Callable[[str], RedisLock]
     ):
         """
         Initializes the rate-limiting manager.
 
         Args:
-            cache (AbstractCache): Cache repository for storing rate-limiting data.
-            robots (AbstractRobotsTxtManager): Manager for robots.txt rules, including crawl delays.
+            cache (Cache): Cache repository for storing rate-limiting data.
+            robots (RobotsTxtManager): Manager for robots.txt rules, including crawl delays.
             token (str): the token for locks.
             default_delay (int): Default delay in seconds between requests if no other delay is specified.
-            lock_factory (Callable[[str], AbstractLock]): Factory function for creating locks.
+            lock_factory (Callable[[str], RedisLock]): Factory function for creating locks.
         """
         if not callable(lock_factory):
-            raise ValueError("lock_factory must be a callable that returns an AbstractLock.")
+            raise ValueError("lock_factory must be a callable that returns a Lock.")
         self._cache = cache
         self._robots = robots
         self._token = token

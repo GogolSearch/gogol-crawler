@@ -2,7 +2,6 @@ import logging
 import re
 import traceback
 import time
-from typing import List
 
 import html
 from urllib.parse import urlparse, urljoin
@@ -13,11 +12,8 @@ from nltk import sent_tokenize
 from playwright.sync_api import sync_playwright
 
 from constants import DJANGO_URL_VALIDATION
-from implementations.exceptions import HTTPError
-from implementations.ratelimiter import RateLimiter
-from implementations.robots import RobotsTxtManager
-from interfaces import AbstractCrawlDataRepository, AbstractCache, AbstractRobotsTxtManager
-from interfaces.ratelimiter import AbstractRateLimiter
+from implementations import CrawlDataRepository
+from implementations import HTTPError, RateLimiter, RobotsTxtManager
 
 
 class Crawler:
@@ -39,9 +35,9 @@ class Crawler:
 
     def __init__(
             self,
-            repository: AbstractCrawlDataRepository,
-            rate_limiter: AbstractRateLimiter,
-            robots_manager: AbstractRobotsTxtManager,
+            repository: CrawlDataRepository,
+            rate_limiter: RateLimiter,
+            robots_manager: RobotsTxtManager,
             seed_list,
 
             config):
@@ -49,10 +45,10 @@ class Crawler:
         Initializes a new Crawler instance with the specified repository, cache, and seed list.
 
         Parameters:
-            repository (AbstractCrawlDataRepository): Repository for storing and retrieving crawl data.
-            rate_limiter (AbstractRateLimiter): Manages the rate-limiting process to control request frequency.
-            robots_manager (AbstractRobotsTxtManager): Manages access to and compliance with robots.txt files.
-            rate_limiter (AbstractRateLimiter): Manages the rate-limiting process to control request frequency.
+            repository (CrawlDataRepository): Repository for storing and retrieving crawl data.
+            rate_limiter (RateLimiter): Manages the rate-limiting process to control request frequency.
+            robots_manager (RobotsTxtManager): Manages access to and compliance with robots.txt files.
+            rate_limiter (RateLimiter): Manages the rate-limiting process to control request frequency.
             seed_list (list): List of initial URLs or seeds for the crawler to process.
             config (dict): The configuration dictionary.
         """

@@ -202,9 +202,15 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--domain_lock_prefix",
+        "--cache_domain_lock_prefix",
         type=str,
-        default=get_env_variable('DOMAIN_LOCK_PREFIX', default="crawler:domain_lock")
+        default=get_env_variable('CACHE_DOMAIN_LOCK_PREFIX', default="crawler:domain_lock")
+    )
+
+    parser.add_argument(
+        "--cache_processed_urls_list_key",
+        type=str,
+        default=get_env_variable('CACHE_PROCESSED_URLS_LIST_KEY', default="crawler:processed_urls_list")
     )
 
     # Cache arguments
@@ -286,6 +292,7 @@ def main() -> None:
     cache = RedisCache(
         redis_client,
         config["cache_url_queue_key"],
+        config["cache_processed_urls_list_key"],
         config["cache_page_list_key"],
         config["cache_deletion_candidates_key"],
         config["cache_failed_tries_list_key"],
@@ -317,7 +324,7 @@ def main() -> None:
         robots,
         token,
         config["crawler_default_delay"],
-        lambda domain : RedisLock(redis_client, config["domain_lock_prefix"] + ":" + domain)
+        lambda domain : RedisLock(redis_client, config["cache_domain_lock_prefix"] + ":" + domain)
     )
 
     # Define seed list for crawling

@@ -1,19 +1,17 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
-from interfaces import AbstractBackend
 import psycopg
 from psycopg_pool import ConnectionPool
 from psycopg.types.json import Jsonb
 
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
-from interfaces import AbstractBackend
 import psycopg
 from psycopg_pool import ConnectionPool
 from psycopg.types.json import Jsonb
 
-class PostgreSQLBackend(AbstractBackend):
+class PostgreSQLBackend:
     """
     PostgreSQLBackend is a backend class for interacting with a PostgreSQL database
     using a connection pool. It provides methods for handling transactions, fetching,
