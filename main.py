@@ -331,7 +331,6 @@ def main() -> None:
     # Define seed list for crawling
     seed_list = [
         "https://www.wikipedia.org",
-        "https://www.archive.org",
         "https://www.nytimes.com",
         "https://www.bbc.com",
         "https://www.reddit.com",
