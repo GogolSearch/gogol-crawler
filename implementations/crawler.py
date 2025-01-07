@@ -12,8 +12,10 @@ from nltk import sent_tokenize
 from playwright.sync_api import sync_playwright
 
 from constants import DJANGO_URL_VALIDATION
-from implementations import CrawlDataRepository
-from implementations import HTTPError, RateLimiter, RobotsTxtManager
+from implementations.repository import CrawlDataRepository
+from implementations.exceptions import HTTPError
+from implementations.ratelimiter import RateLimiter
+from implementations.robots import RobotsTxtManager
 
 
 class Crawler:
@@ -107,6 +109,8 @@ class Crawler:
         canonicals = None
         new_url = None
         title = None
+        content = None
+        icon = None
         text = None
         links = None
         metadata = None
@@ -114,7 +118,6 @@ class Crawler:
         rules = None
 
         domain = urlparse(url).netloc
-
 
         try:
             # Check rate limiting for the domain
@@ -142,7 +145,7 @@ class Crawler:
 
         try:
 
-            new_url, title, content, links, metadata, redirect_type, canonical = self.fetch_and_parse_content(url)
+            new_url, title, content, icon, links, metadata, redirect_type, canonical = self.fetch_and_parse_content(url)
 
         except playwright.sync_api.Error:
             logging.error(f"Playwright error while fetching content{url}:\n{traceback.format_exc()}")
@@ -159,7 +162,6 @@ class Crawler:
         if new_url != url:
             old_url = url
 
-
         if canonical:
             try:
                 canonicals = self.filter_links([canonical], domain)
@@ -167,7 +169,6 @@ class Crawler:
                 canonicals = []
         if canonicals:
             canonical_url = canonicals[0]
-
 
         # Extract robots.txt directives for page processing
         noindex = "noindex" in metadata.get("robots", "").lower()
@@ -189,7 +190,6 @@ class Crawler:
             links = self.filter_links(links, domain)
         except requests.exceptions.RequestException:
             links = links
-
 
         # Handle "nosnippet" and generate the best snippet
         snippet = None if nosnippet else self.generate_best_snippet(content, title, max_snippet_value)
@@ -213,6 +213,7 @@ class Crawler:
             "title": title,
             "description": description,
             "content": content,
+            "icon": icon,
             "metadata": metadata,
             "links": links
         }
@@ -257,7 +258,8 @@ class Crawler:
             tuple: A tuple containing the following information:
                 - new_url (str): The final URL after redirection (if applicable).
                 - title (str): The title of the page.
-                - clean_text (str): The cleaned text from the page.
+                - text (str): The cleaned text from the page.
+                - icon (str): the page icon
                 - links (list): A list of links extracted from the page.
                 - metadata (dict): A dictionary containing metadata extracted from the page.
                 - redirect_type (int or None): The type of HTTP redirection (if any).
@@ -298,6 +300,7 @@ class Crawler:
 
             # Continue with normal page processing if the status code is OK
             title = page.title()
+            icon = self.get_favicon_url(page)
 
             # Extract metadata directly with Playwright
             metadata = self.extract_metadata(page)
@@ -316,10 +319,31 @@ class Crawler:
             canonical_element = page.query_selector('link[rel="canonical"]')
             canonical = urljoin(new_url, canonical_element.get_attribute('href')) if canonical_element else None
 
-            return new_url, title, text, links, metadata, redirect_type, canonical
+            return new_url, title, text, icon, links, metadata, redirect_type, canonical
 
         finally:
             page.close()
+
+    def get_favicon_url(self, page):
+        icon = None
+        favicon = page.query_selector('link[rel="icon"]')
+        base_url = page.url
+
+        if favicon:
+            icon_url = favicon.get_attribute('href')
+            icon = urljoin(base_url, icon_url) if icon_url else None
+        else:
+            try:
+                icon_url = urljoin(base_url, "/favicon.ico")
+
+                response = requests.get(icon_url, timeout=5, headers={'User-Agent': self.config["browser_user_agent"]})
+                if response.status_code == 200:
+                    icon = icon_url
+                else:
+                    icon = None
+            except requests.RequestException:
+                icon = None
+        return icon
 
     @staticmethod
     def sanitize_data(title, description, text, metadata) -> tuple:

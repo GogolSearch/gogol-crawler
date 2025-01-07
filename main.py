@@ -14,7 +14,8 @@ from implementations.crawler import Crawler
 from implementations.lock import RedisLock
 from implementations.ratelimiter import RateLimiter
 from implementations.repository import CrawlDataRepository
-from implementations import RedisCache, PostgreSQLBackend
+from implementations.cache import RedisCache
+from implementations.backend import PostgreSQLBackend
 from implementations.robots import RobotsTxtManager
 
 

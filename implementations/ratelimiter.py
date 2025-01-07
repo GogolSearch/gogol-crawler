@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Callable
 
-from implementations import RedisCache
+from implementations.cache import RedisCache
 from implementations.lock import RedisLock
 from implementations.robots import RobotsTxtManager
 

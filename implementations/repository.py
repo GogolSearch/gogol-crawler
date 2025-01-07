@@ -1,13 +1,14 @@
 import logging
 import time
 import traceback
-import uuid
 from typing import Dict
 
 import psycopg
 import redis
 
-from implementations import PostgreSQLBackend, RedisLock, RedisCache
+from implementations.backend import PostgreSQLBackend
+from implementations.lock import RedisLock
+from implementations.cache import  RedisCache
 
 
 class CrawlDataRepository:

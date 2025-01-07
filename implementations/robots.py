@@ -1,9 +1,7 @@
-import time
-
 from protego import Protego
 import requests
 import logging
-from typing import Optional, List, Union, NamedTuple
+from typing import Optional
 
 
 class RobotsTxtManager:
@@ -41,7 +39,7 @@ class RobotsTxtManager:
 
         # Fetch robots.txt
         robots_url = f"http://{domain}/robots.txt"
-        response = requests.get(robots_url, timeout=5)
+        response = requests.get(robots_url, timeout=5, headers={'User-Agent': self.user_agent})
         if response.status_code == 200:
             robots_txt = response.text
             rp = Protego.parse(robots_txt)
