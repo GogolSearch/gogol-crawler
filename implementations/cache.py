@@ -14,6 +14,10 @@ class RedisSerializer:
     def serialize_data(self, parent_key, data):
         if data is None:
             return "<nil>"
+        if data is False:
+            return "<false>"
+        if data is True:
+            return "<true>"
         if isinstance(data, (str, int, float)):
             return data
         elif isinstance(data, list):
@@ -68,6 +72,10 @@ class RedisSerializer:
                 value = {}
             elif data_key == "<nil>":
                 value = None
+            elif data_key == "<true>":
+                value = True
+            elif data_key == "<false>":
+                value = False
             return value
 
 class RedisCache:

@@ -111,7 +111,7 @@ class Crawler:
         title = None
         content = None
         icon = None
-        adult = None
+        adult = False
         text = None
         links = None
         metadata = None
