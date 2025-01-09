@@ -111,6 +111,7 @@ class Crawler:
         title = None
         content = None
         icon = None
+        adult = None
         text = None
         links = None
         metadata = None
@@ -192,7 +193,7 @@ class Crawler:
             links = links
 
         # Handle "nosnippet" and generate the best snippet
-        snippet = None if nosnippet else self.generate_best_snippet(content, title, max_snippet_value)
+        snippet = None if nosnippet else self.generate_snippet(content, max_snippet_value)
 
         # Insert data into the repository
         description = metadata.get("description", snippet)
@@ -204,6 +205,9 @@ class Crawler:
             self.repository.add_failed_try(url)
             self.repository.add_failed_try(old_url)
             return
+        rating = metadata.get("rating", None)
+        if rating:
+            adult = rating in ("adult", "rta-5042-1996-1400-1577-rta")
 
         data = {
             "url": new_url,
@@ -214,6 +218,7 @@ class Crawler:
             "description": description,
             "content": content,
             "icon": icon,
+            "adult":  adult,
             "metadata": metadata,
             "links": links
         }
@@ -391,50 +396,6 @@ class Crawler:
         return self.max_description_length
 
     @staticmethod
-    def score_sentences(sentences, title):
-        """
-        Evaluates each sentence based on its relevance to the page title and returns the sentences
-        sorted by descending relevance score.
-
-        Relevance is determined by several factors:
-        - Sentences containing keywords from the title are scored higher.
-        - Sentences appearing earlier in the text are considered more important.
-        - Longer sentences, which provide more context, are scored higher.
-
-        Args:
-            sentences (list): A list of sentences (strings) to evaluate.
-            title (str): The title of the page, used to extract keywords.
-
-        Returns:
-            list: A list of tuples, each containing a sentence and its relevance score.
-                  The list is sorted by score in descending order.
-        """
-        scores = []
-
-        # Convert the title to lowercase to compare with the keywords in the sentences
-        title_keywords = title.lower().split()
-
-        for sentence in sentences:
-            score = 0
-
-            # Add points if the sentence contains title keywords
-            for keyword in title_keywords:
-                if keyword in sentence.lower():
-                    score += 2  # Increase score for each keyword found in the sentence
-
-            # Calculate position score: the closer the sentence is to the start, the more important it is
-            position_score = max(0, int(1 - (sentences.index(sentence) / len(sentences))))
-            score += position_score
-
-            # Calculate score based on sentence length: longer sentences are rated higher
-            score += min(5, int(len(sentence) / 100))
-
-            scores.append((sentence, score))
-
-        # Sort sentences by relevance score in descending order
-        return sorted(scores, key=lambda x: x[1], reverse=True)
-
-    @staticmethod
     def extract_metadata(page):
         """
         Extracts relevant metadata from a webpage using Playwright.
@@ -470,40 +431,39 @@ class Crawler:
 
         return metadata
 
-    def generate_best_snippet(self, text, title, max_length):
+    @staticmethod
+    def generate_snippet(text, max_length):
         """
-        Generates the best snippet by evaluating sentences and selecting the most relevant one.
-        The snippet is chosen based on sentence relevance and length constraints.
+        Generates a snippet from the provided text.
 
         Args:
             text (str): The body text of the page to generate the snippet from.
-            title (str): The title of the page, used to extract keywords for relevance evaluation.
             max_length (int): The maximum allowed length for the snippet.
 
         Returns:
-            str: The best snippet, ensuring it fits within the specified maximum length.
+            str: Snippet text.
         """
         # Tokenize the text into sentences
         sentences = sent_tokenize(text)
 
-        # Clean and filter sentences to remove excessive whitespace
-        sentences = [re.sub(r'\s+', ' ', sentence.strip()) for sentence in sentences]
+        # Initialize the snippet content
+        snippet = ""
 
-        # Evaluate sentences based on their relevance to the title
-        scored_sentences = self.score_sentences(sentences, title)
-
-        # Select the best sentence or combination of sentences
-        best_snippet = ''
-        for sentence, score in scored_sentences:
-            if len(best_snippet) + len(sentence) > max_length:
+        for sentence in sentences:
+            # Check if adding the next sentence would exceed max_length
+            if len(snippet) + len(sentence) <= max_length:
+                snippet += sentence + " "
+            else:
                 break
-            best_snippet += sentence + " "
 
-        # Truncate to ensure the snippet fits within the maximum length
-        if len(best_snippet) > max_length:
-            best_snippet = best_snippet[:max_length].rsplit(' ', 1)[0]
+        # Trim the snippet to the max length if needed
+        snippet = snippet.strip()
 
-        return best_snippet.strip()
+        # If the snippet is too long, truncate to max_length
+        if len(snippet) > max_length:
+            snippet = snippet[:max_length].rsplit(' ', 1)[0] + "..."
+
+        return snippet
 
     def stop(self):
         """
