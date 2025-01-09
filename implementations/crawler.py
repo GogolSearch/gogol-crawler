@@ -193,6 +193,9 @@ class Crawler:
 
         # Handle "nosnippet" and generate the best snippet
         snippet = None if nosnippet else self.generate_snippet(content, max_snippet_value)
+        # If no snippet generated, fallback to a part of the content
+        if not snippet:
+            snippet = content[:max_snippet_value]  # Take a part of the content
 
         # Insert data into the repository
         description = metadata.get("description", snippet)
