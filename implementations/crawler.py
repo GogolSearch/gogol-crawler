@@ -111,7 +111,6 @@ class Crawler:
         title = None
         content = None
         icon = None
-        adult = False
         text = None
         links = None
         metadata = None
@@ -205,9 +204,6 @@ class Crawler:
             self.repository.add_failed_try(url)
             self.repository.add_failed_try(old_url)
             return
-        rating = metadata.get("rating", None)
-        if rating:
-            adult = rating in ("adult", "rta-5042-1996-1400-1577-rta")
 
         data = {
             "url": new_url,
@@ -218,7 +214,6 @@ class Crawler:
             "description": description,
             "content": content,
             "icon": icon,
-            "adult":  adult,
             "metadata": metadata,
             "links": links
         }
