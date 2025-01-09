@@ -250,7 +250,8 @@ class CrawlDataRepository:
 
         logging.debug("Returning a popped URL from the cache.")
         url = self._cache.pop_url()
-        self._cache.add_processed_url(url)
+        if url:
+            self._cache.add_processed_url(url)
         return url
 
     def put_url(self, *urls : str):
