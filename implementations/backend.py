@@ -1,15 +1,8 @@
-import logging
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
-import psycopg
-from psycopg_pool import ConnectionPool
-from psycopg.types.json import Jsonb
+from psycopg.types.json import Json
 
-from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import psycopg
 from psycopg_pool import ConnectionPool
-from psycopg.types.json import Jsonb
 
 class PostgreSQLBackend:
     """
@@ -193,7 +186,7 @@ class PostgreSQLBackend:
         query = "CALL batch_insert_pages(%s)"
         connection = self._get_connection()
         cursor = self._get_cursor(connection)
-        cursor.execute(query, (Jsonb(pages_data),))
+        cursor.execute(query, (Json(pages_data),))
 
         # If not in a transaction, commit and release the connection
         if not self._in_transaction:
