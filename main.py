@@ -330,14 +330,13 @@ def main() -> None:
 
     # Define seed list for crawling
     seed_list = [
-        "https://www.wikipedia.org",
-        "https://www.nytimes.com",
-        "https://www.bbc.com",
+        "https://fr.wikipedia.org",
         "https://www.reddit.com",
         "https://www.github.com",
         "https://www.stackoverflow.com",
-        "https://www.medium.com",
         "https://www.imdb.com",
+        "https://www.lemonde.fr",
+        "https://www.lefigaro.fr",
     ]
     c = Crawler(cdr, rate_limiter, robots, seed_list, config)
 
